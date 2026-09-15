@@ -28,3 +28,7 @@ python3 /var/lib/hermes/scripts/matriz.py update TASK_ID --important no --urgent
 Apresente poucos itens, preserve descanso intencional e escolha um começo. Q1 = fazer; Q2 = planejar/proteger; Q3 = reduzir/recusar/delegar se houver alguém adequado; Q4 = eliminar/limitar ou assumir como lazer consciente. Pareto é bússola, não regra. Brechas de 10-15 minutos servem para passos que caibam, não para colonizar descanso.
 
 Separe sempre Vida e Trabalho na apresentação. Classifique pelo contexto e só pergunte quando a ambiguidade puder mudar a ordem. O serviço `matriz-nudge` envia o resumo diário às 09:00 usando `morning_nudge.py`.
+
+## Calendar (optional)
+
+Se o dono conectar o Google Calendar pelo Plow, você pode ler compromissos reais para embasar a prioridade e, com consentimento explícito, criar blocos de foco. Ver `references/calendar.md`. Sem conexão (ou sem o relay do Plow online), os tools não existem: diga isso e peça os prazos por escrito.

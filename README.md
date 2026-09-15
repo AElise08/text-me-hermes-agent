@@ -25,6 +25,30 @@ The `matriz-nudge` service sends a message at 09:00 in the container's timezone,
 
 Send a message to the line. text-me asks for the single most important goal of the week, then accepts a raw list with one task per line. It does not invent importance or urgency when context is missing.
 
+## Calendar (optional)
+
+text-me can ground its priorities in the owner's real calendar. The access
+comes from Plow's Google connector, which covers Gmail and Google Calendar
+together: the owner connects their Google account at
+<https://app.plow.co> → Connectors, and Plow then offers the calendar
+operations (`calendar.list`, `calendar.events.list`, `calendar.freebusy`,
+`calendar.events.create/update/delete`) to the agent through the relay.
+
+Nothing connects by itself. The agent never asks for a Google password or API
+key; it offers the step and, once the owner has connected, reads real
+commitments and — with explicit consent — blocks focus time. The relay must be
+online on the owner's machine for any of this to exist.
+
+To check what the relay is offering right now:
+
+```sh
+python3 /var/lib/hermes/scripts/plow_tools.py            # every tool
+python3 /var/lib/hermes/scripts/plow_tools.py --calendar # calendar only
+```
+
+It exits non-zero with `... is not connected` when the relay is offline, and
+prints the calendar tool names once the connector is connected.
+
 ## Tests
 
 ```sh
