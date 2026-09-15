@@ -6,8 +6,12 @@ class PromptTests(unittest.TestCase):
   soul=(ROOT/'runtime'/'SOUL.md').read_text(encoding='utf-8')
   self.assertIn("Hi! Send me everything on your plate",soul)
   self.assertIn("Oi! Me manda tudo que está na tua lista",soul)
-  self.assertIn("Never open in Portuguese",soul)
-  self.assertIn("mirror that language consistently",soul)
+  # The reply follows the words the person actually sent, from the first
+  # message; the bilingual opening is reserved for a first message with no
+  # words at all.
+  self.assertIn("Reply in the language the person actually wrote in",soul)
+  self.assertIn("from their very first message",soul)
+  self.assertIn("Only when the first message carries no words at all",soul)
  def test_proposal_first_survives(self):
   soul=(ROOT/'runtime'/'SOUL.md').read_text(encoding='utf-8')
   self.assertIn("Chegue propondo, não entrevistando",soul)
