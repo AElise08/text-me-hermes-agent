@@ -1,0 +1,11 @@
+services:
+  agent:
+    build: .
+    environment:
+      AGENT_ID: ${AGENT_ID:-text-me}
+    volumes:
+      - ./plow-credentials:/var/lib/plow/credentials.host:ro
+      - agent-home:/var/lib/hermes
+    stop_grace_period: 35s
+volumes:
+  agent-home:

@@ -1,0 +1,14 @@
+#!/command/with-contenv sh
+set -eu
+export HOME=/var/lib/hermes HERMES_HOME=/var/lib/hermes TZ="${TZ:-America/Belem}"
+while :; do
+  wait=$(python3 - <<'PY'
+from datetime import datetime,timedelta
+now=datetime.now().astimezone(); nxt=now.replace(hour=9,minute=0,second=0,microsecond=0)
+if nxt<=now:nxt+=timedelta(days=1)
+print(max(1,int((nxt-now).total_seconds())))
+PY
+)
+  sleep "$wait"
+  /command/s6-setuidgid hermes sh -c 'python3 /var/lib/hermes/scripts/morning_nudge.py | python3 /var/lib/hermes/scripts/send_chat.py --file -' || true
+done

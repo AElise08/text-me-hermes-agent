@@ -1,0 +1,8 @@
+Saved
+Copyright 2026 text-me contributors
+
+This product includes software developed at The Plow Collective, Inc
+(https://plow.co), used under the Apache License 2.0:
+
+- the plow-cloud-agents base image pinned in the Dockerfile
+- plow-pbc/agent-index-client, fetched at build from vendor/client.pin

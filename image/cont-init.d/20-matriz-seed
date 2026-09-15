@@ -1,0 +1,9 @@
+#!/command/with-contenv sh
+set -eu
+HOME=/var/lib/hermes
+install -d -o 10000 -g 10000 -m 0755 "$HOME/scripts"
+cp -a /opt/matriz/scripts/. "$HOME/scripts/"
+chown -R 10000:10000 "$HOME/scripts"
+chmod 0755 "$HOME/scripts"/*.py
+install -d -o 10000 -g 10000 -m 0700 "$HOME/.matriz"
+if [ ! -f "$HOME/.matriz/state.json" ]; then cp /opt/matriz/templates/state.json "$HOME/.matriz/state.json"; chown 10000:10000 "$HOME/.matriz/state.json"; fi
