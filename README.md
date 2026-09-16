@@ -1,53 +1,125 @@
 # text-me
 
-A text-first Eisenhower prioritization partner for iMessage. Share your task list and it weighs importance against urgency, keeps life and work goals separate, and returns one clear next step. Its approach combines the Eisenhower matrix with practical planning: one goal at a time, real deadlines, intentional rest, and flexible work methods.
+**Dump your list. Get one next step — in iMessage.**
 
-## Install on Plow
+Install text-me, mint a Plow Chat line, and you get a phone number. Text it
+from your iPhone like you'd text a friend — over **iMessage or SMS**. No app,
+no Kanban board, no guilt. It weighs importance against urgency, keeps life
+and work apart, and answers with one thing to start.
+
+In the thread it calls itself **Matriz**. The agent, the repo, and the Agent
+Index listing are **text-me**.
+
+First question, in the language you wrote in:
+
+**Send me everything on your plate. I'll organize it and tell you where to start.**
+
+## What a session looks like (iMessage)
+
+![Priorities over iMessage: a dumped list comes back as one ordered next step](prints/1-priorities-hackathon.png)
+
+```
+You:     I need finish a send of hackathon (video today) and a Redis
+         presentation tomorrow (18h)
+text-me: Work — all three land in Q1.
+         Start with the video tonight. Nothing else until it's uploaded.
+         Redis prep gets a protected block tomorrow, before 18h.
+```
+
+It does not invent deadlines, people, or a weekly goal you did not give it.
+If a fact would change the order, it asks; otherwise it proposes.
+
+## Use cases
+
+- **Dump the list.** Text everything on your plate, one task per line or in
+  a paragraph. text-me classifies each as life or work, then Q1–Q4
+  (important × urgent), and ends with **one** start: "Começa por X porque…"
+- **A morning nudge on your phone.** At 09:00 in your timezone it texts first:
+  today's life focus and work focus, plus what is important even if it is
+  not urgent. Empty state: it asks that question and waits.
+- **Protect the week, not the inbox.** One weekly goal per sphere (life /
+  work). A new yes costs time of something else — it compares before you
+  take it on.
+
+## Install
+
+You need Git, Docker Compose, and **Python 3.10+** (the helper scripts use
+3.10 syntax; the agent itself runs inside Docker).
 
 ```sh
 git clone https://github.com/plow-pbc/plow-agents.git
 export PATH="$PWD/plow-agents/bin:$PATH"
-cd matriz-agent
-plow-agents login
-plow-agents lines
-plow-agents mint ln_xxx
+
+git clone https://github.com/AElise08/text-me-hermes-agent.git
+cd text-me-hermes-agent
+
+plow-agents login                 # text the printed “Plow Activate: …” code
+plow-agents lines                 # pick a line whose STATUS is free
+plow-agents mint ln_xxx           # writes ./plow-credentials — do this before the first up
 docker compose up --build -d
-docker compose logs -f agent
+docker compose logs -f agent      # wait for: plow-init: configured ... as cht_
 ```
 
-If there is no unused line, run `plow-agents login --new-line`, complete activation by SMS, run `lines`, then run `mint` for the new line. This package does not create or activate a line by itself.
+If you have no assistant line yet: `plow-agents login --new-line`, then `lines`
+and `mint`.
 
-## Daily nudge
+`plow-credentials` and `.env` are gitignored. Do not commit them.
 
-The `matriz-nudge` service sends a message at 09:00 in the container's timezone, asking what is important even when it is not urgent. Once state exists, it proposes separate Life and Work focus areas. Set `TZ` in `compose.yml` when needed.
+## How to use it
 
-## First use
+After `plow-agents mint`, open **Messages** on your iPhone and text the number
+on that line.
 
-Send a message to the line. text-me asks for the single most important goal of the week, then accepts a raw list with one task per line. It does not invent importance or urgency when context is missing.
+1. **First texts.** Write in the language you want replies in. text-me
+   mirrors it from the first message. If the first message has no words
+   (empty, or an untranscribed attachment), it sends one bilingual line and
+   then follows you.
+2. **Dump, then start.** Send the list. It proposes an order and one next
+   step. Correct it in the thread ("that's life, not work", "no deadline")
+   — it will reclassify instead of guessing.
+3. **Daily nudge** (default 09:00): it texts *you* first. Set timezone with
+   `TZ` in `compose.override.yml` (IANA name, e.g. `America/Belem`). Until
+   you set one, the nudge uses `America/Belem`.
+
+```sh
+cp compose.override.example.yml compose.override.yml
+# edit TZ, then:
+docker compose up -d --force-recreate
+```
+
+```sh
+docker compose down          # stop, keep memory
+docker compose down -v       # wipe local memory (new setup)
+plow-agents revoke           # retire the line in plow-credentials
+```
+
+Goals and tasks live in the agent home volume (`.matriz/state.json`). Only
+on this install; `down -v` wipes them.
 
 ## Calendar (optional)
 
-text-me can ground its priorities in the owner's real calendar. The access
-comes from Plow's Google connector, which covers Gmail and Google Calendar
-together: the owner connects their Google account at
-<https://app.plow.co> → Connectors, and Plow then offers the calendar
-operations (`calendar.list`, `calendar.events.list`, `calendar.freebusy`,
-`calendar.events.create/update/delete`) to the agent through the relay.
+text-me can ground priorities in the owner's real calendar. Connect Google
+at <https://app.plow.co> → Connectors. The agent never asks for a Google
+password or API key. The Plow relay on the owner's machine must be online.
 
-Nothing connects by itself. The agent never asks for a Google password or API
-key; it offers the step and, once the owner has connected, reads real
-commitments and — with explicit consent — blocks focus time. The relay must be
-online on the owner's machine for any of this to exist.
+With the connector up it can read the next day or two and — with explicit
+consent in the same conversation — block focus time. Without it, send
+deadlines in the text.
 
-To check what the relay is offering right now:
+Inside the container:
 
 ```sh
 python3 /var/lib/hermes/scripts/plow_tools.py            # every tool
 python3 /var/lib/hermes/scripts/plow_tools.py --calendar # calendar only
 ```
 
-It exits non-zero with `... is not connected` when the relay is offline, and
-prints the calendar tool names once the connector is connected.
+## Usage reporting
+
+This image reports token usage to the [Agent Index](https://aiworthusing.com/agent-index/text-me)
+once an hour: day × model counts, nothing else. The listing page (name, repo,
+video) is **not** published by this boot — that is a separate step.
+
+`AGENT_ID` defaults to `text-me`.
 
 ## Tests
 
@@ -55,15 +127,8 @@ prints the calendar tool names once the connector is connected.
 python3 -m unittest discover -s tests -q
 ```
 
-## Activate on a new line
+## License
 
-The code is tested and packaged. To activate it:
-
-1. Create or activate a new iMessage line in its terminal with `plow-agents login --new-line`, then send the printed activation code by SMS.
-2. Confirm the unused line with `plow-agents lines`.
-3. In this directory, mint it with `plow-agents mint <LINE_ID>`.
-4. Start it with `docker compose up --build -d`.
-5. Wait for `plow-init: configured` in `docker compose logs -f agent`.
-6. Send the first message to the new number and answer the weekly-goal question.
-
-Use a dedicated unused line. Minting creates a live credential. Keep `plow-credentials` out of Git.
+MIT. See [LICENSE](LICENSE). Built on the same architecture as
+[Parley](https://github.com/AElise08/parley-hermes-agent) and
+[Saved](https://github.com/AElise08/saved-hermes-agent) (MIT).

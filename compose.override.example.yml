@@ -1,0 +1,15 @@
+# Copy to compose.override.yml (gitignored) after minting a line.
+# Timezone is owner-specific — do not assume a country.
+#
+# The morning nudge reads TZ from the container environment
+# (default America/Belem if unset). Set it here.
+services:
+  agent:
+    environment:
+      AGENT_ID: text-me
+      # IANA zone, e.g. America/Belem, Europe/Lisbon, America/New_York
+      # TZ: UTC
+      # Optional. Omit these to use the Plow default model.
+      # HERMES_PROVIDER: deepseek
+      # HERMES_MODEL: deepseek-flash
+      # DEEPSEEK_API_KEY: ${DEEPSEEK_API_KEY}
