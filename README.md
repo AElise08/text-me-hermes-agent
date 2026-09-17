@@ -103,9 +103,9 @@ can omit it on the CLI.
 # For a local test only, you can still run: docker compose up --build
 ```
 
-The workflow makes the GHCR package public and fails if that step cannot be
-completed. Copy the `repository@sha256:…` line from the Action summary, then
-request it on a **free** line:
+The workflow links the GHCR package to this repository, makes it public, and
+fails if that step cannot be completed. Copy the `repository@sha256:…` line
+from the Action summary, then request it on a **free** line:
 
 ```sh
 plow-agents deploy ghcr.io/aelise08/text-me-hermes-agent@sha256:… --line ln_xxx

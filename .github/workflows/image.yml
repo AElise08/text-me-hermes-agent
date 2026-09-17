@@ -41,7 +41,9 @@ jobs:
         run: |
           docker build --platform linux/amd64 \
             --tag "$IMAGE:v1" \
-            --tag "$IMAGE:sha-${GITHUB_SHA}" .
+            --tag "$IMAGE:sha-${GITHUB_SHA}" \
+            --label "org.opencontainers.image.source=${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}" \
+            --label "org.opencontainers.image.revision=${GITHUB_SHA}" .
       - name: Push
         run: |
           docker push "$IMAGE:v1"
