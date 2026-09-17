@@ -134,6 +134,8 @@ def inbox_clips(interests: list[str] | None = None, avoid: list[str] | None = No
         blob = f"{subject} {snippet} {sender}".lower()
         if any(term in blob for term in avoid):
             continue
+        if any(term in blob for term in OWN_EDITION):
+            continue
         if interests and not any(term in blob for term in interests):
             continue
         line = subject or snippet[:120]
@@ -147,6 +149,11 @@ def inbox_clips(interests: list[str] | None = None, avoid: list[str] | None = No
 
 
 NOISE = ("noreply@", "no-reply@", "newsletter", "unsubscribe", "nvoip", "alert")
+OWN_EDITION = (
+    "seu reporte diário", "seu reporte diario",
+    "seu report diário", "seu report diario",
+    "your daily report",
+)
 HOT = ("re:", "fwd:", "reunião", "meeting", "cancel", "cancelou", "urgente", "?", "moved", "updated")
 
 

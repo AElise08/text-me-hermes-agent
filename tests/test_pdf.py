@@ -24,6 +24,26 @@ class PdfTests(unittest.TestCase):
             self.assertIn(b"%%EOF", data[-16:])
             self.assertGreater(len(data), 2000)
 
+    def test_charge_page_is_not_blank(self):
+        from io import BytesIO
+        from PIL import Image
+
+        pdf = load("pdf_mod", "scripts/pdf.py")
+        buf = BytesIO()
+        Image.new("RGB", (400, 220), (200, 30, 30)).save(buf, format="JPEG")
+        pages = pdf.pages_from_markdown(
+            "# Título\n\n- 07:30–09:20  Aula\n\n---\n## Charge do dia\n![Charge](charge-0.jpg)\n_tirinha_\n",
+            {"charge-0.jpg": buf.getvalue()},
+        )
+        self.assertGreaterEqual(len(pages), 2)
+        paper = (247, 243, 234)
+        reds = 0
+        for page in pages:
+            for px in page.resize((80, 110), Image.BOX).getdata():
+                if px[0] > 150 and px[1] < 80 and px[2] < 80:
+                    reds += 1
+        self.assertGreater(reds, 8, "cartoon pixels missing from the PDF pages")
+
 
 class IppTests(unittest.TestCase):
     def test_ipp_uri_becomes_http_631(self):

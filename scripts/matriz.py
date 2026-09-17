@@ -661,6 +661,11 @@ def main() -> None:
                 pt=(data.get("language") or "").lower().startswith("pt"),
             )
             extra["meetings"] = report.get("meetings") or extra.get("meetings") or []
+            extra["people"] = [
+                item
+                for item in list(report.get("approvals") or []) + list(report.get("fires") or [])
+                if isinstance(item, dict) and (item.get("who") or "").strip()
+            ]
             extra["hold"] = edition_mod.hold_line(data, extra)
             inbox = gmail_mod.inbox_clips(
                 profile.get("interests") or [],
@@ -678,21 +683,31 @@ def main() -> None:
             profile.get("interests") or [],
             profile.get("avoid") or [],
             lang,
+            goals=data.get("goals") or {},
         )
         merged = []
         seen = set()
-        for line in web + inbox:
-            key = (line.split(" — ")[0].strip().lower())
+        for item in list(web) + list(inbox):
+            if isinstance(item, dict):
+                key = (item.get("title") or item.get("line") or "").strip().lower()
+            else:
+                key = str(item).split(" — ")[0].strip().lower()
+                item = {
+                    "title": str(item).split(" — ")[0].strip(),
+                    "happened": str(item).split(" — ", 1)[1].strip() if " — " in str(item) else "",
+                    "why": "",
+                    "source": "",
+                }
             if not key or key in seen or key in used:
                 continue
             seen.add(key)
-            merged.append(line)
+            merged.append(item)
         extra["clips"] = merged[:6]
         if profile.get("charge"):
             extra["charge"] = research_mod.charge(lang)
         if args.extra_file:
             researched = json.loads(Path(args.extra_file).read_text(encoding="utf-8"))
-            for key in ("title", "focus", "clips", "readings", "hobbies", "charge", "meetings"):
+            for key in ("title", "focus", "clips", "readings", "hobbies", "charge", "meetings", "people", "kicker", "approvals", "decisions", "exceptions"):
                 if researched.get(key):
                     extra[key] = researched[key]
         dest = home() / ".matriz" / "editions"

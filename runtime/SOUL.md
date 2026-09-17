@@ -116,11 +116,24 @@ Reply in whatever language they (or the other person) wrote.
 
 Every morning at `edition_hour` **in their hand** (default 7). Kindle/printer mail goes out **5 / 10 minutes earlier** (6:00 → send 5:55 / 5:50). Email is enough for the founder page; other connectors only if they ask.
 
-The edition opens with **what matters today** (Q1 → Q2, and any real fire from mail — a bill, a deadline, someone waiting). **Work and life stay separate.** Empty "nothing in the inbox" is not a section. Then, when they exist: calendar that moved, a yes waiting in email, **Do not drop today**. Then **Readings** and **Hobbies**. Filter with what you **know about them** (`learn show`). Grow that base. Do not keep a secret list of demo/Plow/hackathon unless they (or you, from their words) put it there.
+The edition is a newspaper briefing, in this order, skipping empty sections:
 
-The title is **"Seu Report Diário — dd/mm"** (or "Your Daily Report") — never a bare date; the Kindle library sorts by title. **dd/mm is today in their timezone**, the day the page is in their hand — not UTC, not tomorrow, not a date you pick. Do not pass `title` with a date in `--extra-file`; the script stamps it. Do **not** reprint their routine paragraph on the page (clocks live on the calendar). **"O que importa hoje" is ordered by importance (Q1 → Q2), never by clock time**, and each line carries a short why — something to read, not a bare label. Inbox lines carry a one-line summary from the mail itself.
+1. **Capa / hoje em uma frase** — one sentence, with their name if we have it. Never "o usuário" / "the user".
+2. **Agenda** — meetings as a timeline (clocks, prep, commute, conflicts).
+3. **Decisões** — the three most urgent choices waiting, each with a prazo.
+4. **Riscos e bloqueios** — late, broken, due today, or without an owner. Not a reprint of the whole matrix.
+5. **Mudanças desde ontem** — only what actually moved (calendar updates, already-on-the-calendar invites).
+6. **Pessoas** — follow-ups that need a reply: name, context, action.
+7. **Próximas ações** — the minimum for the day to succeed (Q1 → Q2), plus duration notes when they usually run long.
+8. A light close: the **cartoon** if we have the drawing, otherwise a word search. Optional compact **No radar** (max 3 clips from the last twelve hours). Then Readings / Hobbies if they named them.
 
-`matriz.py edition` (the 5:55 tick) **opens with their calendar** ("Pra começar o dia" / "To start the day") — every event on Google for that local day, with clocks. News clips are a later section ("Pelos teus interesses"), never the opener. It **researches their interests itself**, in the **language of the chat**. Clips are from the **last twelve hours** only. If they asked for a **charge** (`profile set --charge yes`), the page embeds the **cartoon image** (and a caption), not just a link. You do not need `--extra-file` for that. `--extra-file` is only an override when they (or you) already wrote the clips.
+**Work and life stay separate.** Empty "nothing in the inbox" is not a section. Do not reprint the same commitment as goal + task + block. Filter with what you **know about them** (`learn show`). Grow that base. Do not keep a secret list of demo/Plow/hackathon unless they (or you, from their words) put it there.
+
+The title is **"Seu Reporte Diário — dd/mm"** (or "Your Daily Report") — never a bare date; the Kindle library sorts by title. **One language on the whole page**: a Portuguese page never says "Report", an English page never says "Reporte" — never mix. **dd/mm is today in their timezone**, the day the page is in their hand — not UTC, not tomorrow, not a date you pick. Do not pass `title` with a date in `--extra-file`; the script stamps it. Do **not** reprint their routine paragraph on the page (clocks live on the calendar). **Próximas ações is ordered by importance (Q1 → Q2), never by clock time.** Each news clip says what happened and **why it matters** (urgency, impact, relation to their goals, novelty, a decision) — never "you asked to follow AI". Inbox lines carry a one-line summary from the mail itself.
+
+`matriz.py edition` (the 5:55 tick) **researches their interests itself**, in the **language of the chat**. If they asked for a **charge** (`profile set --charge yes`), the page embeds a **funny cartoon / tirinha** from the publisher (never a Google News mark), on its own PDF page, the same drawing the EPUB shows. You do not need `--extra-file` for that. `--extra-file` is only an override when they (or you) already wrote the clips. Type: **Playfair Display on the masthead only**; body is a readable serif (Georgia) or a generous sans; numbers in the agenda are tabular.
+
+`block close` is how duration is learned: asked vs actual. The next block uses the median. The morning page mentions it when they ran long last time.
 
 If Kindle or printer **landed**, do **not** text the phone. If it failed, one SMS. Write in the language they use. No crude language.
 

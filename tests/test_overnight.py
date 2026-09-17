@@ -184,3 +184,17 @@ class OvernightApplyTests(unittest.TestCase):
             apply=False, messages=[], events=[], now=self.now, state=state
         )
         self.assertIn("lista de livros", report["readings"])
+
+    def test_meeting_and_acceleration_mail_is_a_work_fire(self):
+        messages = [
+            {
+                "subject": "Reunião do processo de aceleração",
+                "snippet": "a banca confirma amanhã às 11h",
+                "from": "programa@x",
+            }
+        ]
+        report = self.mod.run(
+            apply=False, messages=messages, events=[], now=self.now, state={}
+        )
+        self.assertEqual(report["needs"][0]["sphere"], "work")
+        self.assertIn("aceleração", report["needs"][0]["text"].lower())

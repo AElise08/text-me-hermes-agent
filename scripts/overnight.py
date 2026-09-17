@@ -53,7 +53,14 @@ PAY = re.compile(
     r"bill due|overdue)\b)",
     re.I,
 )
+WORK_MAIL = re.compile(
+    r"\b(reuni[aã]o|reuni[oõ]es|meeting|meetings|standup|"
+    r"deadline|prazos?|entrevista|interview|"
+    r"acelera\w+|start-?ups?|processo seletivo|onboarding)\b",
+    re.I,
+)
 GOOGLE_CAL = ("calendar-notification", "calendar.google.com", "google calendar")
+OWN_EDITION = re.compile(r"(seu reporte? di[aá]rio|your daily report)", re.I)
 LANES = ("work", "life", "reading", "hobby")
 
 
@@ -218,6 +225,13 @@ def classify(msg: dict, events: list[dict], day: datetime, spheres: dict | None 
         return {**base, "kind": "reading"}
     if lane == "hobby":
         return {**base, "kind": "hobby"}
+    if WORK_MAIL.search(blob):
+        return {
+            **base,
+            "kind": "need",
+            "important": True,
+            "sphere": sphere or "work",
+        }
     return {**base, "kind": "skip"}
 
 
@@ -266,6 +280,8 @@ def run(
     applied, approvals, needs, already, readings, hobbies = [], [], [], [], [], []
     for msg in messages:
         blob = _blob(msg).lower()
+        if OWN_EDITION.search(msg.get("subject") or "") or OWN_EDITION.search(blob):
+            continue
         if any(term in blob for term in avoid):
             continue
         noisy = any(term in blob for term in gmail_mod.NOISE)
@@ -273,12 +289,17 @@ def run(
         if noisy and item["kind"] == "skip":
             continue
         snippet = (msg.get("snippet") or msg.get("plain") or "").strip()
+        sender = (msg.get("from") or "").strip()
+        who = sender.split("<")[0].strip().strip('"')
+        if "@" in who and "." in who:
+            who = who.split("@")[0]
         row = {
             "text": item["text"],
             "summary": snippet[:160] if snippet.casefold() != item["text"].casefold() else "",
             "sphere": item.get("sphere") or "",
             "important": bool(item.get("important")),
             "why": item.get("why") or "",
+            "who": who,
         }
         if item["kind"] == "move" and apply:
             try:

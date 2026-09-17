@@ -55,15 +55,20 @@ account token — Latch is optional. That path reads Calendar, reads Gmail,
 and sends mail (EPUB → Kindle, PDF → printer email). Latch is not required.
 
 Kindle: `edition_hour` is **in their hand**. Mail 5 minutes earlier
-(6:00 → 5:55). If it landed, do not text the phone. Title is "Seu Report
-Diário — dd/mm", never a bare date; **dd/mm is today in their timezone**,
+(6:00 → 5:55). If it landed, do not text the phone. Title is "Seu Reporte
+Diário — dd/mm", never a bare date and never mixed language; **dd/mm is today in their timezone**,
 never tomorrow and never a date in `--extra-file`. Do not reprint their
-routine on the page. "O que importa hoje" is ordered by
-importance (Q1 first), never by clock, each line with a short why. The
-5:55 tick runs `matriz.py edition`, which researches their interests
-itself (and a charge if `profile.charge` is on). `--extra-file` is only an
-override. The edition opens with
-what needs them today (pay, deadline, someone waiting — not hobby news),
-calendar that moved, a yes waiting in email, and the one thing they will
-not drop. Then readings from their list and hobbies they named. Printer: PDF to `--printer-email`, 10 minutes early. Commercial
+routine on the page. The briefing order is: today in one sentence →
+Agenda (timeline) → Decisions (3, with a deadline) → Risks → What
+changed → People (name, context, action) → Next actions (Q1 first,
+never by clock) → cartoon or word search. Each news clip says what
+happened and why it matters (urgency, impact, goals, novelty, a
+decision) — never "you asked to follow AI". Use their name, never
+"the user". The 5:55 tick runs `matriz.py edition`, which researches
+their interests itself (and a funny cartoon if `profile.charge` is on).
+`--extra-file` is only an override. The charge is the cartoon drawing
+on its own PDF page, not a Google News mark. Masthead is Playfair;
+body is Georgia / a readable sans; agenda numbers are tabular. Then
+readings from their list and hobbies they named. Printer: PDF to
+`--printer-email`, 10 minutes early. Commercial
 ebooks: store link only. Public domain: Gutenberg. Daily edition: always ok.

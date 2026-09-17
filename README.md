@@ -47,7 +47,7 @@ job template.
 - **After this, then that.** "After the launch" + the link: it reads a date
   the page actually contains. "When the previous one closes" waits. It answers
   in whatever language you (or the other person) wrote.
-- **"Seu Report Diário" / "Your Daily Report" on Kindle.** Title is that name
+- **"Seu Reporte Diário" / "Your Daily Report" on Kindle.** Title is that name
   plus **today in your timezone**, so it does not vanish in the Kindle library.
   Every morning it researches your interests itself (short clips, optional
   editorial cartoon if you asked) and puts on the page: what needs you (a bill
@@ -127,11 +127,12 @@ Text the line you minted.
    Until you do, it follows `TZ` in compose if you set one, otherwise UTC.
    Do not edit compose just to get the paper on your morning.
 
-7. **Every morning** the page builds itself: it researches the interests you
-   named (and skips what you asked to keep out), optionally one editorial
-   cartoon if you asked for a charge, then the four blocks — what needs you,
-   calendar that moved, a yes in email, the one thing not to drop. If Kindle
-   or printer landed, it does not also ping the phone.
+7. **Every morning** the page builds itself as a newspaper: the Eisenhower
+   matrix first (what is important and urgent, plus meetings and processes
+   that arrived in mail), then the day's calendar with clocks, then a short
+   recap of the news you asked to follow — what happened and why it matters
+   to you — and optionally one editorial cartoon if you asked for a charge.
+   If Kindle or printer landed, it does not also ping the phone.
 
 ```sh
 docker compose down          # stop, keep memory

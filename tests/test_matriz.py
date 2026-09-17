@@ -105,11 +105,12 @@ class MatrixTests(unittest.TestCase):
             self.cli(h, "goal", "set", "--category", "work", "--text", "Ship the Kindle edition")
             out = self.cli(h, "edition", "--no-send")
             md = Path(out["markdown"]).read_text(encoding="utf-8")
-            self.assertIn("What matters today", md)
+            self.assertIn("Today in one sentence", md)
             self.assertNotIn("What needs you today", md)
             self.assertNotIn("Nothing in the inbox matches", md)
-            self.assertIn("Do not drop today", md)
-            self.assertIn("Work: Ship the Kindle edition", md)
+            self.assertIn("Ship the Kindle edition", md)
+            self.assertEqual(md.count("Ship the Kindle edition"), 1)
+            self.assertIn("morning edition", md)
             self.assertNotIn("A yes waiting in email", md)
             self.assertNotIn("bus to campus", md)
             self.assertNotIn("Routine:", md)
@@ -124,6 +125,7 @@ class MatrixTests(unittest.TestCase):
             with zipfile.ZipFile(epub) as zf:
                 self.assertIn("mimetype", zf.namelist())
                 self.assertEqual(zf.read("mimetype"), b"application/epub+zip")
+                self.assertIn("OEBPS/PlayfairDisplay-Bold.ttf", zf.namelist())
             e = {**os.environ, "HERMES_HOME": h}
             nudge = subprocess.check_output(["python3", str(NUDGE)], env=e, text=True)
             self.assertIn("Kindle", nudge)
@@ -262,7 +264,8 @@ class MatrixTests(unittest.TestCase):
             self.assertIn("lista de livros", md)
             self.assertIn("Hobbies", md)
             self.assertIn("piano", md)
-            self.assertIn("Vida: Lembrete de pagamento", md)
+            self.assertIn("Lembrete de pagamento", md)
+            self.assertNotIn("Vida: Lembrete", md)
 
     def test_focus_orders_by_importance_not_insertion(self):
         with tempfile.TemporaryDirectory() as h:
@@ -281,14 +284,13 @@ class MatrixTests(unittest.TestCase):
             self.cli(h, "language", "set", "pt")
             out = self.cli(h, "edition", "--no-send")
             md = Path(out["markdown"]).read_text(encoding="utf-8")
-            self.assertIn("Seu Report Diário", out["title"])
-            section = md.split("## O que importa hoje")[1]
-            q1 = section.index("entregar relatório")
-            q2 = section.index("escrever newsletter")
-            q4 = section.index("arrumar gaveta")
+            self.assertIn("Seu Reporte Diário", out["title"])
+            q1 = md.index("entregar relatório")
+            q2 = md.index("escrever newsletter")
+            q4 = md.index("arrumar gaveta")
             self.assertLess(q1, q2)
             self.assertLess(q2, q4)
-            self.assertIn("prazo hoje", section)
+            self.assertIn("prazo hoje", md)
 
     def test_extra_file_injects_research_and_title(self):
         with tempfile.TemporaryDirectory() as h:
@@ -302,16 +304,124 @@ class MatrixTests(unittest.TestCase):
             self.cli(h, "language", "set", "pt")
             out = self.cli(h, "edition", "--no-send", "--extra-file", str(extra))
             md = Path(out["markdown"]).read_text(encoding="utf-8")
-            self.assertTrue(out["title"].startswith("Seu Report Diário"))
+            self.assertTrue(out["title"].startswith("Seu Reporte Diário"))
             self.assertIn("IA na educação", md)
-            self.assertIn("## Charge", md)
+            self.assertIn("## Charge do dia", md)
             self.assertIn("The Guardian", md)
-            self.assertIn("## Pra começar o dia", md)
+            self.assertIn("## Agenda", md)
             self.assertIn("07:30–09:20  Aula", md)
-            self.assertIn("## Pelos teus interesses", md)
-            start = md.index("## Pra começar o dia")
-            news = md.index("## Pelos teus interesses")
+            self.assertIn("## No radar", md)
+            start = md.index("## Agenda")
+            news = md.index("## No radar")
             self.assertLess(start, news)
+
+    def test_same_commitment_is_not_printed_three_times(self):
+        import importlib.util
+        import sys
+        scripts = str(ROOT / "scripts")
+        if scripts not in sys.path:
+            sys.path.insert(0, scripts)
+        spec = importlib.util.spec_from_file_location("edition", ROOT / "scripts" / "edition.py")
+        edition = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(edition)
+        md = edition.compose(
+            {
+                "language": "pt",
+                "goals": {"work": "Fechar mecânica dos fluidos usando a janela na faculdade"},
+                "tasks": [
+                    {
+                        "text": "Estudar mecânica dos fluidos",
+                        "category": "work",
+                        "quadrant": "Q1",
+                        "done": False,
+                        "due": "2026-09-17",
+                        "reason": "janela de 9h20-11h10 na faculdade",
+                    }
+                ],
+                "profile": {"name": "Mel"},
+                "blocks": [
+                    {"text": "Estudar mecânica dos fluidos", "planned_minutes": 110, "status": "open"}
+                ],
+            },
+            datetime.now(timezone.utc),
+        )
+        self.assertIn("## Hoje em uma frase", md)
+        self.assertLessEqual(md.count("mecânica dos fluidos"), 2)
+        self.assertIn("Mel, hoje o dia pende", md)
+        self.assertNotIn("## Não larga hoje", md)
+        self.assertNotIn("## Blocos em andamento", md)
+        self.assertNotIn("o usuário", md.lower())
+        self.assertNotIn("the user", md.lower())
+        self.assertIn("edição da manhã", md)
+        self.assertNotIn("Report Diário", md)
+        self.assertIn("Reporte Diário", md)
+
+    def test_edition_opens_with_the_matrix_then_calendar_and_news_recap(self):
+        import importlib.util
+        import sys
+        scripts = str(ROOT / "scripts")
+        if scripts not in sys.path:
+            sys.path.insert(0, scripts)
+        spec = importlib.util.spec_from_file_location("edition", ROOT / "scripts" / "edition.py")
+        edition = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(edition)
+        md = edition.compose(
+            {
+                "language": "pt",
+                "goals": {"work": "acelerar a startup"},
+                "tasks": [
+                    {
+                        "text": "processo de aceleração",
+                        "category": "work",
+                        "quadrant": "Q1",
+                        "done": False,
+                        "reason": "prazo da turma",
+                    }
+                ],
+                "profile": {},
+                "blocks": [],
+            },
+            datetime.now(timezone.utc),
+            extra={
+                "fires": [{"text": "Reunião com a banca às 11h", "sphere": "work", "who": "Banca"}],
+                "approvals": [
+                    {
+                        "text": "Confirmar a banca das 11h",
+                        "who": "Banca",
+                        "due": "hoje 11:00",
+                    }
+                ],
+                "meetings": ["11:00–12:00  Banca da aceleradora"],
+                "clips": [
+                    {
+                        "title": "IA na sala de aula",
+                        "happened": "Uma rede passou a usar modelos na correção.",
+                        "why": "Impacto na meta de trabalho: IA na sala de aula.",
+                        "source": "Folha",
+                    }
+                ],
+            },
+        )
+        cover = md.index("## Hoje em uma frase")
+        agenda = md.index("## Agenda")
+        decisions = md.index("## Decisões")
+        risks = md.index("## Riscos e bloqueios")
+        people = md.index("## Pessoas")
+        actions = md.index("## Próximas ações")
+        news = md.index("## No radar")
+        self.assertLess(cover, agenda)
+        self.assertLess(agenda, decisions)
+        self.assertLess(decisions, risks)
+        self.assertLess(risks, people)
+        self.assertLess(people, actions)
+        self.assertLess(actions, news)
+        self.assertIn("processo de aceleração", md)
+        self.assertIn("Banca da aceleradora", md)
+        self.assertIn("prazo hoje 11:00", md)
+        self.assertIn("O que aconteceu:", md)
+        self.assertIn("Porque te importa:", md)
+        self.assertNotIn("Pediste para acompanhar", md)
+        self.assertIn("Banca —", md)
 
     def test_title_date_is_the_local_day_not_the_extra_file(self):
         import importlib.util
@@ -326,7 +436,7 @@ class MatrixTests(unittest.TestCase):
         spec.loader.exec_module(edition)
         when = datetime(2026, 9, 16, 23, 54, tzinfo=ZoneInfo("America/Sao_Paulo"))
         title = edition.stamp_title(True, when, {"title": "Seu Report Diário — 17/09"})
-        self.assertEqual(title, "Seu Report Diário — 16/09")
+        self.assertEqual(title, "Seu Reporte Diário — 16/09")
         md = edition.compose(
             {"language": "pt", "profile": {"routine": "aula 7h30, fisio 15h"}},
             when,
@@ -367,14 +477,33 @@ class MatrixTests(unittest.TestCase):
                 },
             )
             md = Path(out["markdown"]).read_text(encoding="utf-8")
-            self.assertIn("## Pra começar o dia", md)
+            self.assertIn("## Agenda", md)
             self.assertIn("07:30–09:20  Aula", md)
             self.assertIn("![Charge](charge-0.jpg)", md)
-            self.assertIn("## Pelos teus interesses", md)
+            self.assertIn("## No radar", md)
             with zipfile.ZipFile(out["epub"]) as zf:
                 names = zf.namelist()
                 self.assertIn("OEBPS/charge-0.jpg", names)
                 self.assertTrue(zf.read("OEBPS/charge-0.jpg")[:3] == b"\xff\xd8\xff")
+            from PIL import Image as PilImage
+            import pdf as pdf_mod
+            pages = pdf_mod.pages_from_markdown(
+                md,
+                {"charge-0.jpg": Path(out["markdown"]).with_name("charge-0.jpg").read_bytes()},
+            )
+            paper = (247, 243, 234)
+            inked = []
+            for page in pages:
+                sample = page.resize((40, 56), PilImage.BOX)
+                inked.append(any(px != paper for px in sample.getdata()))
+            self.assertTrue(any(inked))
+            reds = 0
+            for page in pages:
+                for px in page.resize((80, 110), PilImage.BOX).getdata():
+                    if px[0] > 150 and px[1] < 90 and px[2] < 90:
+                        reds += 1
+            self.assertGreater(reds, 5)
+            self.assertTrue(Path(out["pdf"]).read_bytes().startswith(b"%PDF"))
 
     def test_profile_name_survives(self):
         with tempfile.TemporaryDirectory() as h:

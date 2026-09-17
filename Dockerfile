@@ -4,6 +4,7 @@ COPY LICENSE NOTICE /usr/share/doc/matriz/
 COPY skills/matriz/ /opt/hermes/skills/matriz/
 COPY scripts/ /opt/matriz/scripts/
 COPY templates/ /opt/matriz/templates/
+COPY fonts/ /opt/matriz/fonts/
 RUN chown -R root:root /opt/matriz && chmod 0755 /opt/matriz/scripts/*.py && chmod 0644 /var/lib/hermes/SOUL.md
 
 COPY vendor/client.pin /opt/plow/agent-index-client.pin

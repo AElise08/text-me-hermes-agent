@@ -52,11 +52,36 @@ class ResearchTests(unittest.TestCase):
             ]
         )
         with patch.object(research, "fetch", return_value=payload):
-            out = research.clips(["IA"], avoid=["economia"], language="pt", limit=4, now=NOW)
-        self.assertTrue(any("escola" in x.lower() for x in out))
-        self.assertTrue(all("economia" not in x.lower() for x in out))
-        self.assertTrue(all("velha" not in x.lower() for x in out))
-        self.assertTrue(all("https://" not in x for x in out))
+            with patch.object(research, "article_lede", return_value="A escola mudou a sala com um modelo novo de IA."):
+                out = research.clips(["IA"], avoid=["economia"], language="pt", limit=4, now=NOW)
+        titles = [x["title"] for x in out]
+        self.assertTrue(any("escola" in t.lower() for t in titles))
+        self.assertTrue(all("economia" not in t.lower() for t in titles))
+        self.assertTrue(all("velha" not in t.lower() for t in titles))
+        self.assertIn("escola", out[0]["happened"].lower())
+        self.assertIn("IA", out[0]["why"])
+        self.assertTrue(all("https://" not in x["title"] for x in out))
+
+    def test_why_matters_scores_goals_and_decisions(self):
+        research = load()
+        goals = {"work": "estudar mecânica dos fluidos"}
+        why = research.why_matters(
+            "IA",
+            "pt",
+            title="Modelo novo na mecânica dos fluidos",
+            happened="Um lab soltou um solver hoje.",
+            goals=goals,
+        )
+        self.assertIn("meta de trabalho", why)
+        self.assertNotIn("Pediste para acompanhar", why)
+        decide = research.why_matters(
+            "IA",
+            "pt",
+            title="O congresso deve aprovar a regra",
+            happened="A votação pode sair hoje.",
+            goals={},
+        )
+        self.assertIn("decisão", decide)
 
     def test_undated_and_stale_are_not_shown(self):
         research = load()
@@ -74,8 +99,11 @@ class ResearchTests(unittest.TestCase):
             return payload
 
         with patch.object(research, "fetch", side_effect=fake_fetch):
-            out = research.clips(["AI"], language="de", now=NOW)
-        self.assertEqual(out, ["Fresh model ships — Wire"])
+            with patch.object(research, "article_lede", return_value="A lab shipped a fresh model this morning."):
+                out = research.clips(["AI"], language="de", now=NOW)
+        self.assertEqual([x["title"] for x in out], ["Fresh model ships"])
+        self.assertIn("AI", out[0]["why"])
+        self.assertIn("model", out[0]["happened"])
         self.assertTrue(captured)
         self.assertIn("hl=de", captured[0])
         self.assertIn("ceid=DE:de", captured[0])
@@ -114,6 +142,42 @@ class ResearchTests(unittest.TestCase):
         research = load()
         html = '<meta property="og:image" content="https://ex.test/c.jpg">'
         self.assertEqual(research.og_image(html), "https://ex.test/c.jpg")
+
+    def test_image_for_skips_google_news_mark(self):
+        research = load()
+        from io import BytesIO
+        from PIL import Image
+
+        logo = b"\xff\xd8\xff" + b"\x00" * 80
+        buf = BytesIO()
+        Image.new("RGB", (640, 400), (30, 30, 30)).save(buf, format="JPEG")
+        cartoon = buf.getvalue()
+        page = (
+            '<html><head><meta property="og:image" content="https://www.gstatic.com/gnews/logo.png"></head>'
+            '<body><img src="https://paper.test/charge-do-dia.jpg" width="640"></body></html>'
+        )
+
+        def fake_page(url: str, source_url: str = "", title: str = ""):
+            return "https://paper.test/charge", page
+
+        def fake_img(url: str) -> bytes:
+            if "gstatic" in url or "logo" in url:
+                return logo
+            if "charge-do-dia" in url:
+                return cartoon
+            return b""
+
+        with patch.object(research, "follow_publisher", side_effect=fake_page):
+            with patch.object(research, "fetch_image", side_effect=fake_img):
+                data = research.image_for(
+                    "https://news.google.com/articles/x",
+                    "https://www.gstatic.com/gnews/logo.png",
+                )
+        self.assertEqual(data, cartoon)
+        self.assertTrue(research.logoish("https://www.gstatic.com/gnews/logo.png"))
+        self.assertTrue(research.googleish("https://news.google.com/rss/articles/x"))
+        self.assertFalse(research.article_href("https://www.google-analytics.com/analytics.js"))
+        self.assertTrue(research.article_href("https://atarde.com.br/charges/charge-do-dia-17092026"))
 
 
 if __name__ == "__main__":
