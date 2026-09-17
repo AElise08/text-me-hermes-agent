@@ -23,6 +23,7 @@ import gmail as gmail_mod  # noqa: E402
 import overnight as overnight_mod  # noqa: E402
 import printer as printer_mod  # noqa: E402
 import research as research_mod  # noqa: E402
+import cartoon as cartoon_mod  # noqa: E402
 
 CATS = ("work", "life")
 LANES = ("work", "life", "reading", "hobby")
@@ -53,7 +54,7 @@ def blank_profile() -> dict:
         "life_about": [],
         "edition_hour": 7,
         "timezone": "",
-        "charge": False,
+        "charge": True,
     }
 
 
@@ -704,7 +705,7 @@ def main() -> None:
             merged.append(item)
         extra["clips"] = merged[:6]
         if profile.get("charge"):
-            extra["charge"] = research_mod.charge(lang)
+            extra["charge"] = research_mod.charge(lang) or [cartoon_mod.original_daily_cartoon(lang)]
         if args.extra_file:
             researched = json.loads(Path(args.extra_file).read_text(encoding="utf-8"))
             for key in ("title", "focus", "clips", "readings", "hobbies", "charge", "meetings", "people", "kicker", "approvals", "decisions", "exceptions"):

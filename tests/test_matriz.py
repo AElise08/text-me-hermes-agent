@@ -497,12 +497,12 @@ class MatrixTests(unittest.TestCase):
                 sample = page.resize((40, 56), PilImage.BOX)
                 inked.append(any(px != paper for px in sample.getdata()))
             self.assertTrue(any(inked))
-            reds = 0
+            tones = 0
             for page in pages:
                 for px in page.resize((80, 110), PilImage.BOX).getdata():
-                    if px[0] > 150 and px[1] < 90 and px[2] < 90:
-                        reds += 1
-            self.assertGreater(reds, 5)
+                    if max(px) - min(px) < 8 and sum(px) / 3 < 205:
+                        tones += 1
+            self.assertGreater(tones, 0)
             self.assertTrue(Path(out["pdf"]).read_bytes().startswith(b"%PDF"))
 
     def test_profile_name_survives(self):

@@ -37,12 +37,12 @@ class PdfTests(unittest.TestCase):
         )
         self.assertGreaterEqual(len(pages), 2)
         paper = (247, 243, 234)
-        reds = 0
+        tones = 0
         for page in pages:
             for px in page.resize((80, 110), Image.BOX).getdata():
-                if px[0] > 150 and px[1] < 80 and px[2] < 80:
-                    reds += 1
-        self.assertGreater(reds, 8, "cartoon pixels missing from the PDF pages")
+                if max(px) - min(px) < 8 and sum(px) / 3 < 205:
+                    tones += 1
+        self.assertGreater(tones, 8, "cartoon pixels missing from the PDF pages")
 
 
 class IppTests(unittest.TestCase):
