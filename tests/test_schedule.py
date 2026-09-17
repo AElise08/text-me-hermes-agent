@@ -1,4 +1,6 @@
 import importlib.util
+import os
+import tempfile
 import unittest
 from datetime import datetime
 from pathlib import Path
@@ -42,6 +44,18 @@ class ScheduleTests(unittest.TestCase):
         profile = {"delivery": "message", "edition_hour": 7}
         wake = schedule.next_wake(now, profile, already="2026-09-17")
         self.assertEqual(wake.date().isoformat(), "2026-09-18")
+
+    def test_failed_delivery_retries_with_backoff(self):
+        schedule = load()
+        tz = ZoneInfo("UTC")
+        now = datetime(2026, 9, 17, 8, 0, tzinfo=tz)
+        profile = {"delivery": "kindle", "edition_hour": 7}
+        with tempfile.TemporaryDirectory() as home:
+            with patch.dict(os.environ, {"HERMES_HOME": home}):
+                state = schedule.mark_retry("2026-09-17", now)
+                self.assertEqual(state["attempts"], 1)
+                self.assertEqual(schedule.stamped_day(), "")
+                self.assertEqual(schedule.next_wake(now, profile), now.replace(minute=5))
 
 
 class OvernightTests(unittest.TestCase):

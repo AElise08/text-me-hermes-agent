@@ -28,6 +28,7 @@ HERE = Path(__file__).resolve().parent
 if str(HERE) not in sys.path:
     sys.path.insert(0, str(HERE))
 import cartoon as cartoon_mod
+import dates as dates_mod
 
 UA = "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0.0.0 Safari/537.36"
 TIMEOUT = 12
@@ -172,11 +173,13 @@ _NET = (
 
 
 def fetch(url: str) -> bytes:
+    if not dates_mod.safe_url(url):
+        raise urllib.error.URLError("non-public URL blocked")
     req = urllib.request.Request(
         url,
         headers={"User-Agent": UA, "Accept": "application/rss+xml, application/xml, text/xml, */*"},
     )
-    with urllib.request.urlopen(req, timeout=TIMEOUT) as response:
+    with dates_mod.public_opener().open(req, timeout=TIMEOUT) as response:
         try:
             return response.read()
         except http.client.IncompleteRead as exc:
@@ -184,28 +187,11 @@ def fetch(url: str) -> bytes:
 
 
 def fetch_page(url: str) -> tuple[str, str]:
-    req = urllib.request.Request(
-        url,
-        headers={
-            "User-Agent": UA,
-            "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
-            "Accept-Language": "pt-BR,pt;q=0.9,en;q=0.8",
-            "Referer": "https://news.google.com/",
-        },
-    )
     try:
-        with urllib.request.urlopen(req, timeout=TIMEOUT) as response:
-            final = response.geturl()
-            try:
-                raw = response.read(900_000)
-            except http.client.IncompleteRead as exc:
-                raw = exc.partial or b""
-            ctype = (response.headers.get("Content-Type") or "").lower()
-    except _NET:
+        final, page = dates_mod.fetch_html_page(url)
+    except (ValueError, _NET):
         return url, ""
-    if "javascript" in ctype or "json" in ctype or "image/" in ctype:
-        return final, ""
-    return final, raw.decode("utf-8", "replace")
+    return final, page
 
 
 def googleish(url: str) -> bool:
@@ -337,8 +323,10 @@ def og_description(html_text: str) -> str:
 def fetch_image(url: str) -> bytes:
     if not url:
         return b""
+    if not dates_mod.safe_url(url):
+        return b""
     req = urllib.request.Request(url, headers={"User-Agent": UA, "Accept": "image/*,*/*"})
-    with urllib.request.urlopen(req, timeout=TIMEOUT) as response:
+    with dates_mod.public_opener().open(req, timeout=TIMEOUT) as response:
         data = response.read(2_000_000)
         ctype = (response.headers.get("Content-Type") or "").lower()
     if data[:3] == b"\xff\xd8\xff" or data[:8] == b"\x89PNG\r\n\x1a\n" or data[:4] == b"RIFF" or "image/" in ctype:

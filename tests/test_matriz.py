@@ -98,6 +98,34 @@ class MatrixTests(unittest.TestCase):
             self.assertEqual(empty["after_when"], "")
             self.assertEqual(empty["dates"], [])
 
+    def test_commit_blocks_a_non_public_link(self):
+        with tempfile.TemporaryDirectory() as h:
+            created = self.cli(
+                h, "commit", "add", "--text", "after launch", "--after-url", "http://127.0.0.1/private"
+            )["created"]
+            self.assertIn("public http", created["fetch_error"])
+            self.assertEqual(created["after_when"], "")
+
+    def test_concurrent_writes_do_not_drop_tasks(self):
+        with tempfile.TemporaryDirectory() as h:
+            processes = [
+                subprocess.Popen(
+                    [
+                        "python3", str(SCRIPT), "add", "--text", f"task-{i}",
+                        "--category", "work", "--important", "yes", "--urgent", "no",
+                    ],
+                    env={**os.environ, "HERMES_HOME": h},
+                    stdout=subprocess.DEVNULL,
+                    stderr=subprocess.PIPE,
+                    text=True,
+                )
+                for i in range(16)
+            ]
+            errors = [p.communicate()[1] for p in processes]
+            self.assertTrue(all(p.returncode == 0 for p in processes), errors)
+            shown = self.cli(h, "show")
+            self.assertEqual(len(shown["categories"]["work"]["Q2"]), 16)
+
     def test_edition_writes_epub_and_respects_kindle_delivery(self):
         with tempfile.TemporaryDirectory() as h:
             self.cli(h, "profile", "set", "--delivery", "kindle", "--routine", "bus to campus")

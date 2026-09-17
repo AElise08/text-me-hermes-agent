@@ -55,7 +55,7 @@ job template.
   timezone**, so it does not vanish in a Kindle library. Every morning it
   researches your interests itself (short clips, optional editorial cartoon if
   you asked) and puts on the page: what needs you (a bill even from noreply),
-  calendar changes already applied, a yes waiting in email, the one thing not
+  proposed calendar changes awaiting your yes, a yes waiting in email, the one thing not
   to drop — then readings and hobbies, apart. "What matters today" is ordered
   by **importance**, never by clock. It can land on Kindle, a printer, email,
   or just the thread.

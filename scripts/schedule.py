@@ -55,15 +55,50 @@ def load_profile() -> dict:
 
 def stamped_day() -> str:
     try:
-        return json.loads(stamp_path().read_text(encoding="utf-8")).get("day") or ""
+        stamp = json.loads(stamp_path().read_text(encoding="utf-8"))
+        # Old stamps had only `day`; keep them as successful deliveries.
+        if stamp.get("status", "sent") == "sent":
+            return stamp.get("day") or ""
     except (OSError, json.JSONDecodeError):
-        return ""
+        pass
+    return ""
+
+
+def dispatch_state() -> dict:
+    try:
+        return json.loads(stamp_path().read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        return {}
 
 
 def mark_sent(day: str) -> None:
     path = stamp_path()
     path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(json.dumps({"day": day}) + "\n", encoding="utf-8")
+    path.write_text(
+        json.dumps({"day": day, "status": "sent", "sent_at": datetime.now(zone()).isoformat()}) + "\n",
+        encoding="utf-8",
+    )
+
+
+def mark_retry(day: str, now: datetime | None = None) -> dict:
+    """Persist retry timing so a transient connector error is not a lost day."""
+    now = now or datetime.now(zone())
+    prior = dispatch_state()
+    attempts = int(prior.get("attempts") or 0) + 1 if prior.get("day") == day else 1
+    delay = min(60, 5 * (2 ** (attempts - 1)))
+    retry_at = now + timedelta(minutes=delay)
+    state = {
+        "day": day,
+        "status": "retry",
+        "attempts": attempts,
+        "retry_at": retry_at.isoformat(),
+    }
+    target = stamp_path()
+    target.parent.mkdir(parents=True, exist_ok=True)
+    temp = target.with_suffix(".tmp")
+    temp.write_text(json.dumps(state) + "\n", encoding="utf-8")
+    temp.replace(target)
+    return state
 
 
 def hour(profile: dict | None = None) -> int:
@@ -99,6 +134,16 @@ def next_wake(now: datetime, profile: dict | None = None, already: str | None = 
     today = now.astimezone(now.tzinfo or zone()).date().isoformat()
     if (already if already is not None else stamped_day()) == today:
         return target + timedelta(days=1)
+    retry = dispatch_state()
+    if retry.get("day") == today and retry.get("status") == "retry":
+        try:
+            retry_at = datetime.fromisoformat(retry["retry_at"])
+            if retry_at.tzinfo is None:
+                retry_at = retry_at.replace(tzinfo=now.tzinfo)
+            if retry_at > now:
+                return retry_at
+        except (KeyError, TypeError, ValueError):
+            pass
     if now >= target:
         return now
     return target

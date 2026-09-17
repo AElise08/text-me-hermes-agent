@@ -3,9 +3,82 @@
 from __future__ import annotations
 
 import re
+import ipaddress
+import socket
+import urllib.error
+import urllib.parse
+import urllib.request
 from datetime import datetime, timezone
 from html.parser import HTMLParser
 from typing import Iterable
+
+MAX_HTML_BYTES = 1_000_000
+
+
+def safe_url(url: str) -> bool:
+    """Allow ordinary public web pages, never local services or file URLs."""
+    parsed = urllib.parse.urlsplit((url or "").strip())
+    if parsed.scheme not in {"http", "https"} or not parsed.hostname:
+        return False
+    try:
+        port = parsed.port
+    except ValueError:
+        return False
+    if parsed.username or parsed.password or port not in {None, 80, 443}:
+        return False
+    host = parsed.hostname.rstrip(".").lower()
+    if host == "localhost" or host.endswith((".local", ".internal", ".localhost")):
+        return False
+    try:
+        addresses = {
+            info[4][0] for info in socket.getaddrinfo(host, port or 443, type=socket.SOCK_STREAM)
+        }
+    except OSError:
+        return False
+    try:
+        return bool(addresses) and all(ipaddress.ip_address(address).is_global for address in addresses)
+    except ValueError:
+        return False
+
+
+class _PublicRedirect(urllib.request.HTTPRedirectHandler):
+    def redirect_request(self, request, fp, code, msg, headers, newurl):
+        if not safe_url(newurl):
+            raise urllib.error.URLError("redirect to a non-public URL blocked")
+        return super().redirect_request(request, fp, code, msg, headers, newurl)
+
+
+def public_opener():
+    return urllib.request.build_opener(_PublicRedirect())
+
+
+def fetch_html_page(url: str) -> tuple[str, str]:
+    """Fetch a user-supplied public page with size and redirect limits."""
+    if not safe_url(url):
+        raise ValueError("URL must be a public http(s) page")
+    request = urllib.request.Request(
+        url,
+        headers={"User-Agent": "text-me/1.0", "Accept": "text/html,application/xhtml+xml"},
+    )
+    opener = public_opener()
+    try:
+        with opener.open(request, timeout=12) as response:
+            final = response.geturl()
+            if not safe_url(final):
+                raise ValueError("redirect to a non-public URL blocked")
+            content_type = (response.headers.get("Content-Type") or "").lower()
+            if content_type and "html" not in content_type and "xhtml" not in content_type:
+                raise ValueError("URL did not return HTML")
+            raw = response.read(MAX_HTML_BYTES + 1)
+    except urllib.error.URLError as exc:
+        raise ValueError(f"could not fetch URL: {exc.reason}") from exc
+    if len(raw) > MAX_HTML_BYTES:
+        raise ValueError("URL response is too large")
+    return final, raw.decode("utf-8", "replace")
+
+
+def fetch_html(url: str) -> str:
+    return fetch_html_page(url)[1]
 
 ISO = re.compile(r"\b(20\d{2}-\d{2}-\d{2})(?:[T ](\d{2}:\d{2}))?")
 DMY = re.compile(r"\b(\d{1,2})[/-](\d{1,2})[/-](20\d{2})\b")

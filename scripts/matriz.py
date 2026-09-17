@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import argparse
+import fcntl
 import json
 import os
 import re
@@ -38,6 +39,20 @@ def path() -> Path:
     return home() / ".matriz" / "state.json"
 
 
+def lock_state():
+    """Serialize a complete read/change/write command against the scheduler.
+
+    `save` is atomic, but atomic replacement alone loses an update when two
+    commands both read the old state before either one saves it.  Keep this
+    file descriptor open for the lifetime of the CLI invocation.
+    """
+    target = path()
+    target.parent.mkdir(parents=True, exist_ok=True)
+    handle = (target.parent / "state.lock").open("a+", encoding="utf-8")
+    fcntl.flock(handle.fileno(), fcntl.LOCK_EX)
+    return handle
+
+
 def blank_profile() -> dict:
     return {
         "setup_done": False,
@@ -53,7 +68,7 @@ def blank_profile() -> dict:
         "life_about": [],
         "edition_hour": 7,
         "timezone": "",
-        "charge": True,
+        "charge": False,
     }
 
 
@@ -401,6 +416,9 @@ def parse() -> argparse.Namespace:
 
 def main() -> None:
     args = parse()
+    # Keep a reference until this process exits; that releases the advisory
+    # lock even when a command returns early or raises SystemExit.
+    state_lock = lock_state()
     data = load()
 
     if args.cmd == "goal":
@@ -541,6 +559,8 @@ def main() -> None:
             if gcal_mod.token():
                 start = datetime.fromisoformat(args.when) if args.when.strip() else datetime.now().astimezone()
                 end = start + timedelta(minutes=planned)
+                block["calendar_start"] = start.isoformat()
+                block["calendar_end"] = end.isoformat()
                 try:
                     created = gcal_mod.create(
                         args.text.strip(),
@@ -557,7 +577,30 @@ def main() -> None:
             return
         block = find(data["blocks"], args.id)
         if args.action == "extend":
+            if args.minutes <= 0:
+                raise SystemExit("extension must be positive")
             block.setdefault("extensions", []).append(args.minutes)
+            calendar = block.get("calendar") or {}
+            start_text = block.get("calendar_start") or block.get("when") or ""
+            if calendar and start_text:
+                try:
+                    start = datetime.fromisoformat(start_text)
+                    total = int(block.get("planned_minutes") or 0) + sum(
+                        int(value) for value in block.get("extensions") or []
+                    )
+                    end = start + timedelta(minutes=total)
+                    gcal_mod.update(
+                        calendar["id"],
+                        calendar.get("calendar_id") or calendar.get("calendarId") or "primary",
+                        calendar.get("account") or "",
+                        start=start.isoformat(),
+                        end=end.isoformat(),
+                    )
+                    block["calendar_end"] = end.isoformat()
+                except (KeyError, ValueError, SystemExit) as exc:
+                    # The duration is still useful locally, but surface an
+                    # external-sync failure instead of pretending it moved.
+                    block["calendar_error"] = str(exc)
         else:
             block["status"] = "done"
             actual = int(block.get("asked_minutes") or 0) + sum(int(x) for x in block.get("extensions") or [])
@@ -595,6 +638,11 @@ def main() -> None:
             "dates": [],
         }
         html = args.html or ""
+        if not html and args.after_url:
+            try:
+                html = dates_mod.fetch_html(args.after_url)
+            except ValueError as exc:
+                item["fetch_error"] = str(exc)
         if html:
             item["dates"] = dates_mod.parse_html(html)
             latest = dates_mod.latest(item["dates"])

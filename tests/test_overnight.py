@@ -29,14 +29,7 @@ class OvernightApplyTests(unittest.TestCase):
             "account": "me@x",
         }
 
-    def test_clear_move_updates_calendar(self):
-        captured = {}
-
-        def fake_update(event_id, calendar_id, account, **fields):
-            captured.update(fields)
-            captured["event_id"] = event_id
-            return {"status": "ok"}
-
+    def test_plain_email_move_requires_approval(self):
         messages = [
             {
                 "subject": "vídeo mudou para as 11h",
@@ -44,17 +37,16 @@ class OvernightApplyTests(unittest.TestCase):
                 "from": "Ana <ana@x>",
             }
         ]
-        with patch.object(self.mod.gcal_mod, "update", fake_update):
+        with patch.object(self.mod.gcal_mod, "update", lambda *a, **k: (_ for _ in ()).throw(AssertionError("no update"))):
             report = self.mod.run(
                 apply=True,
                 messages=messages,
                 events=[dict(self.event)],
                 now=self.now,
             )
-        self.assertTrue(report["applied"])
-        self.assertIn("11:00", report["applied"][0]["text"])
-        self.assertTrue(captured["start"].startswith("2026-09-17T11:00"))
-        self.assertEqual(report["approvals"], [])
+        self.assertEqual(report["applied"], [])
+        self.assertEqual(report["approvals"][0]["text"], "vídeo mudou para as 11h")
+        self.assertTrue(report["approvals"][0]["proposed_when"].startswith("2026-09-17T11:00"))
 
     def test_question_stays_approval(self):
         messages = [

@@ -34,9 +34,8 @@ def main() -> int:
         return 0
     try:
         built = json.loads(subprocess.check_output(["python3", str(script), "edition"], text=True))
-    except subprocess.CalledProcessError:
+    except (subprocess.CalledProcessError, json.JSONDecodeError) as exc:
         built = {"sent": False, "send_error": "edition failed"}
-    schedule_mod.mark_sent(today)
     dest = (profile.get("delivery") or built.get("delivery") or "message").strip()
     sent = bool(built.get("sent"))
     lang = ""
@@ -47,15 +46,23 @@ def main() -> int:
         pass
     pt = lang.startswith("pt")
     if dest in ("kindle", "printer") and sent:
+        schedule_mod.mark_sent(today)
         print("[SILENT]")
         return 0
-    if dest in ("kindle", "printer") and not sent:
+    if dest in ("kindle", "printer", "email") and not sent:
+        retry = schedule_mod.mark_retry(today, now)
         err = built.get("send_error") or built.get("ipp_error") or "not sent"
+        if retry["attempts"] > 1:
+            print("[SILENT]")
+            return 0
         if pt:
-            print(f"A edição das {schedule_mod.hour(profile):02d}h não chegou no {dest}. {err}")
+            print(f"A edição das {schedule_mod.hour(profile):02d}h não chegou no {dest}. Vou tentar de novo em {retry['retry_at'][11:16]}. {err}")
         else:
-            print(f"Today's {dest} edition did not land. {err}")
+            print(f"Today's {dest} edition did not land. I will retry at {retry['retry_at'][11:16]}. {err}")
         return 0
+    # Message has no provider receipt, but the edition was built successfully.
+    # Email already has a successful provider send at this point.
+    schedule_mod.mark_sent(today)
     env = {**os.environ, "TEXT_ME_SKIP_EDITION": "1"}
     sys.stdout.write(subprocess.check_output(["python3", str(HERE / "morning_nudge.py")], env=env, text=True))
     return 0

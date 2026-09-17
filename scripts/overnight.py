@@ -1,10 +1,9 @@
 #!/usr/bin/env python3
-"""Overnight mail → calendar already updated, or a yes sitting on the Kindle.
+"""Overnight mail → calendar proposal, or a yes sitting on the Kindle.
 
-Clear time change ("mudou para as 11h") updates Google before the edition
-mails. A question ("podemos remarcar?") does not — it lands under
-"needs your yes today". WhatsApp/iMessage to a personal number is invisible;
-Gmail and Calendar invites are not.
+A plain email that says "mudou para as 11h" is a proposal, not permission to
+move a real event. It lands under "needs your yes today". WhatsApp/iMessage
+to a personal number is invisible; Gmail and Calendar invites are not.
 """
 from __future__ import annotations
 
@@ -205,12 +204,13 @@ def classify(msg: dict, events: list[dict], day: datetime, spheres: dict | None 
     if CANCEL.search(blob) and not when:
         return {**base, "kind": "approval", "important": True}
     if when and MOVED.search(blob):
-        event = match_event(blob, events)
-        if event:
-            if not sphere:
-                sphere = guess_sphere(str(event.get("summary") or ""), spheres)
-            return {**base, "kind": "move", "event": event, "when": when, "sphere": sphere, "important": True}
-        return {**base, "kind": "approval", "important": True}
+        # A plain email is untrusted input: it can be mistaken, forwarded, or
+        # malicious.  The list connector does not expose a signed Calendar
+        # event revision, so it is not enough evidence to move a real event.
+        # Keep the proposed change visible and let the owner approve it in the
+        # chat. Structured Calendar updates can be wired here later using an
+        # event id + revision from the connector.
+        return {**base, "kind": "approval", "important": True, "proposed_when": when.isoformat()}
     if MOVED.search(blob) or CANCEL.search(blob):
         return {**base, "kind": "approval", "important": True}
     waiting = WAITING.search(blob) or any(k in blob.lower() for k in ("re:", "fwd:"))
@@ -300,6 +300,7 @@ def run(
             "important": bool(item.get("important")),
             "why": item.get("why") or "",
             "who": who,
+            "proposed_when": item.get("proposed_when") or "",
         }
         if item["kind"] == "move" and apply:
             try:
