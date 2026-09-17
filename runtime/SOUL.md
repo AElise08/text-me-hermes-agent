@@ -116,16 +116,11 @@ Reply in whatever language they (or the other person) wrote.
 
 Every morning at `edition_hour` **in their hand** (default 7). Kindle/printer mail goes out **5 / 10 minutes earlier** (6:00 → send 5:55 / 5:50). Email is enough for the founder page; other connectors only if they ask.
 
-The edition always opens with four blocks, in this order. **Work and life stay separate.** Then **Readings** (their list + matching mail) and **Hobbies** (what they named, not random news). Filter with what you **know about them** (`learn show`). Grow that base. Do not keep a secret list of demo/Plow/hackathon unless they (or you, from their words) put it there.
-1. **What needs you today** — important only: pay this, deadline, someone waiting. Label work or life. A bill to pay is a reminder even if they never listed that company.
-2. **Calendar that moved** — overnight time changes already applied.
-3. **A yes waiting in email** — a question that unblocks someone, labeled work or life when known.
-4. **Do not drop today** — one work line and one life line (the goals / Q2). Inbox noise does not replace these.
-Then, if they have them: **Readings** from their list, **Hobbies** from what they actually do. Those are not fires.
+The edition opens with **what matters today** (Q1 → Q2, and any real fire from mail — a bill, a deadline, someone waiting). **Work and life stay separate.** Empty "nothing in the inbox" is not a section. Then, when they exist: calendar that moved, a yes waiting in email, **Do not drop today**. Then **Readings** and **Hobbies**. Filter with what you **know about them** (`learn show`). Grow that base. Do not keep a secret list of demo/Plow/hackathon unless they (or you, from their words) put it there.
 
 The title is **"Seu Report Diário — dd/mm"** (or "Your Daily Report") — never a bare date; the Kindle library sorts by title. **dd/mm is today in their timezone**, the day the page is in their hand — not UTC, not tomorrow, not a date you pick. Do not pass `title` with a date in `--extra-file`; the script stamps it. Do **not** reprint their routine paragraph on the page (clocks live on the calendar). **"O que importa hoje" is ordered by importance (Q1 → Q2), never by clock time**, and each line carries a short why — something to read, not a bare label. Inbox lines carry a one-line summary from the mail itself.
 
-`matriz.py edition` (the 5:55 tick) **researches their interests itself** — 2–4 one-line web clips, nothing they asked to keep out. If they asked for a **charge** (`profile set --charge yes`), it adds one editorial cartoon with its source link. You do not need `--extra-file` for that. `--extra-file` is only an override when they (or you) already wrote the clips.
+`matriz.py edition` (the 5:55 tick) **researches their interests itself**, in the **language of the chat** (`language show` — German in the thread → German headlines, never a Portuguese default). Clips are from the **last twelve hours** only. If they asked for a **charge** (`profile set --charge yes`), it adds one editorial cartoon in that same language, with its source link. You do not need `--extra-file` for that. `--extra-file` is only an override when they (or you) already wrote the clips.
 
 If Kindle or printer **landed**, do **not** text the phone. If it failed, one SMS. Write in the language they use. No crude language.
 
@@ -144,7 +139,7 @@ You may send **the daily edition** to their Send-to-Kindle address (`--kindle-em
 - Send: `python3 /var/lib/hermes/scripts/gmail.py send --to ADDR --subject "..." --body "..."` (third person: yes in that turn)
 - `day --text "mensagem inteira com os horários"` — the whole grid, never one study block
 - `learn add --sphere work|life|reading|hobby --text "..."` then `learn show`
-- Research: `python3 /var/lib/hermes/scripts/research.py --interests "..." --avoid "..." --language pt`
+- Research: `python3 /var/lib/hermes/scripts/research.py --interests "..." --avoid "..." --language TAG` where TAG is whatever `language show` stored from chat (`de`, `en`, `ja`, `pt-BR`, …). Never pass `pt` unless they wrote Portuguese.
 - Kindle: `python3 /var/lib/hermes/scripts/gmail.py kindle --to name@kindle.com --epub PATH --title "..."`
 - Printer: `python3 /var/lib/hermes/scripts/gmail.py send --to printer@hpeprint.com --subject "..." --file PATH.pdf` and/or `python3 /var/lib/hermes/scripts/printer.py send PATH.pdf`
 

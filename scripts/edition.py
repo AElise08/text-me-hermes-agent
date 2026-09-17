@@ -192,29 +192,18 @@ def compose(state: dict, when: datetime, extra: dict | None = None) -> str:
     active = [t for t in state.get("tasks") or [] if not t.get("done")]
     open_blocks = [b for b in state.get("blocks") or [] if b.get("status") != "done"]
     title = stamp_title(pt, when, extra)
+    work_l = "Trabalho" if pt else "Work"
+    life_l = "Vida" if pt else "Life"
     lines = [f"# {title}", ""]
     fires = extra.get("fires") or extra.get("needs") or []
     split = _by_sphere(fires)
-    lines.append("## " + ("O que precisa de ti hoje" if pt else "What needs you today"))
-    work_l = "Trabalho" if pt else "Work"
-    life_l = "Vida" if pt else "Life"
-    if split["work"] or split["life"]:
-        for text in split["work"]:
-            lines.append(f"- {work_l}: {text}")
-        for text in split["life"]:
-            lines.append(f"- {life_l}: {text}")
-        for text in split.get("", []) :
-            lines.append(f"- {text}")
-    else:
-        lines.append(
-            "- "
-            + (
-                "Nada na caixa bate com o que tu marcaste como trabalho ou vida."
-                if pt
-                else "Nothing in the inbox matches what you marked as work or life."
-            )
-        )
-    lines.append("")
+    fire_lines = []
+    for text in split["work"]:
+        fire_lines.append(f"{work_l}: {text}")
+    for text in split["life"]:
+        fire_lines.append(f"{life_l}: {text}")
+    for text in split.get("", []):
+        fire_lines.append(text)
     exceptions = extra.get("exceptions") or []
     lines.append("## " + ("Agenda que mudou" if pt else "Calendar that moved"))
     if exceptions:
@@ -282,7 +271,8 @@ def compose(state: dict, when: datetime, extra: dict | None = None) -> str:
             focus.append(("Trabalho: " if pt else "Work: ") + goals["work"])
         if goals.get("life"):
             focus.append(("Vida: " if pt else "Life: ") + goals["life"])
-    for item in focus or ["—" ]:
+    ranked = fire_lines + [x for x in (focus or []) if x and x != "—"]
+    for item in ranked or ["—"]:
         lines.append(f"- {item}")
     lines.append("")
     if open_blocks:

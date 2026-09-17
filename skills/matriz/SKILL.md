@@ -33,7 +33,7 @@ python3 /var/lib/hermes/scripts/matriz.py learn add --sphere work --text "follow
 python3 /var/lib/hermes/scripts/matriz.py learn add --sphere reading --text "lista de livros"
 python3 /var/lib/hermes/scripts/matriz.py learn add --sphere hobby --text "piano"
 python3 /var/lib/hermes/scripts/matriz.py learn show
-python3 /var/lib/hermes/scripts/research.py --interests "IA" --avoid "economia" --language pt
+python3 /var/lib/hermes/scripts/research.py --interests "IA" --avoid "economia" --language de
 python3 /var/lib/hermes/scripts/gmail.py list
 python3 /var/lib/hermes/scripts/gmail.py get MESSAGE_ID
 python3 /var/lib/hermes/scripts/gmail.py kindle --to name@kindle.com --epub PATH

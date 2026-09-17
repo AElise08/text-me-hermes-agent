@@ -41,7 +41,7 @@ class SeparationAndNudgeTests(unittest.TestCase):
         self.assertIn("printer.py", soul)
         self.assertIn("hpeprint", soul)
         self.assertIn("5:55", soul)
-        self.assertIn("What needs you today", soul)
+        self.assertIn("what matters today", soul)
         self.assertIn("Do not drop today", soul)
         self.assertIn("Work and life stay separate", soul)
         self.assertIn("learn add", soul)
