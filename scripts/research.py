@@ -22,6 +22,12 @@ import xml.etree.ElementTree as ET
 from datetime import datetime, timedelta, timezone
 from email.utils import parsedate_to_datetime
 from io import BytesIO
+from pathlib import Path
+
+HERE = Path(__file__).resolve().parent
+if str(HERE) not in sys.path:
+    sys.path.insert(0, str(HERE))
+import cartoon as cartoon_mod
 
 UA = "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0.0.0 Safari/537.36"
 TIMEOUT = 12
@@ -96,7 +102,28 @@ _LOGO_HINT = (
 _TOON_HINT = (
     "charge", "cartoon", "caricatura", "vineta", "viñeta",
     "karikatur", "dessin", "vignetta", "spotprent",
+    "tirinha", "quadrinho", "comic", "cartum", "humor",
 )
+_LOCALISH = (
+    "prefeitura",
+    "câmara municipal",
+    "camara municipal",
+    "secretaria municipal",
+)
+COMIC_HOMES = {
+    "pt": (
+        "https://www.willtirando.com.br/",
+        "https://www.umsabadoqualquer.com/",
+        "https://www.humorpolitico.com.br/",
+    ),
+    "en": (
+        "https://xkcd.com/",
+        "https://www.gocomics.com/",
+    ),
+    "de": ("https://xkcd.com/",),
+    "es": ("https://www.umsabadoqualquer.com/",),
+    "fr": ("https://xkcd.com/",),
+}
 _SKIP_HREF = (
     "google-analytics", "googletagmanager", "doubleclick", "facebook.com/",
     "twitter.com/", "instagram.com/", "whatsapp.com/", "schema.org",
@@ -383,7 +410,7 @@ def image_for(article_url: str, rss_image: str = "", source_url: str = "", title
     return b""
 
 
-def first_sentences(text: str, n: int = 2, limit: int = 360) -> str:
+def first_sentences(text: str, n: int = 4, limit: int = 720) -> str:
     text = " ".join(_plain(text).split())
     if not text:
         return ""
@@ -399,6 +426,21 @@ _JUNK_LEDE = (
     "google notícias",
     "google news",
     "agregada de fontes do mundo inteiro",
+    "página principal",
+    "aceitar cookies",
+    "subscribe",
+    "centro de memória",
+    "all rights reserved",
+    "javascript",
+    "artigos salvos",
+    "minha folha",
+    "área personalizada",
+    "area personalizada",
+    "conteúdo criado em parceria",
+    "conteudo criado em parceria",
+    "últimas notícias do brasil e do mundo",
+    "ultimas noticias do brasil e do mundo",
+    "cnpj:",
 )
 
 
@@ -412,14 +454,13 @@ def clean_lede(text: str, title: str = "") -> str:
     blob = (text or "").casefold()
     if any(bit in blob for bit in _JUNK_LEDE):
         return ""
-    if echoes_title(text, title):
+    if echoes_title(text, title) and len(text or "") < 140:
         return ""
     text = (text or "").strip()
     if len(text) < 40:
         return ""
-    bits = _title_bits(title)
-    need = 2 if len(bits) >= 2 else 1
-    if bits and sum(1 for w in bits if w in blob) < need:
+    bits = [w for w in _title_bits(title) if len(w) >= 5]
+    if len(bits) >= 2 and not any(w in blob for w in bits):
         return ""
     return text
 
@@ -430,17 +471,18 @@ def article_lede(url: str, source_url: str = "", title: str = "") -> str:
     _final, page = follow_publisher(url, source_url, title)
     if not page:
         return ""
-    desc = clean_lede(first_sentences(og_description(page)), title)
-    if len(desc) >= 80:
+    desc = clean_lede(first_sentences(og_description(page), 4, 720), title)
+    if len(desc) >= 140:
         return desc
     paras: list[str] = []
     for match in _P.finditer(page):
-        bit = clean_lede(first_sentences(_plain(match.group(1)), 1, 240), title)
-        if len(bit) >= 40:
+        bit = first_sentences(_plain(match.group(1)), 3, 320)
+        bit = clean_lede(bit, title) or (bit if len(bit) >= 70 else "")
+        if len(bit) >= 50:
             paras.append(bit)
-        if len(paras) >= 2:
+        if len(paras) >= 3:
             break
-    return first_sentences(" ".join(paras) or desc, 2)
+    return first_sentences(" ".join(paras) or desc, 4, 720)
 
 
 def why_matters(
@@ -452,40 +494,53 @@ def why_matters(
 ) -> str:
     """Why this clip is on the page — urgency, impact, goals, novelty, a decision."""
     primary = tag(language).split("-")[0][:2]
-    blob = f"{title} {happened} {interest}".casefold()
+    blob = f"{title} {happened}".casefold()
     work = ((goals or {}).get("work") or "").casefold()
     life = ((goals or {}).get("life") or "").casefold()
     work_hit = bool(work) and any(len(w) > 4 and w in blob for w in work.split())
     life_hit = bool(life) and any(len(w) > 4 and w in blob for w in life.split())
     urgent = any(w in blob for w in ("hoje", "today", "agora", "now", "prazo", "deadline", "urgente"))
-    decide = any(w in blob for w in ("deve", "should", "pode", "decis", "voto", "approve", "risco"))
+    decide = any(
+        w in blob
+        for w in (
+            "decisão",
+            "decisao",
+            "vota",
+            "votação",
+            "votacao",
+            "aprova",
+            "approve",
+            "should you",
+            "needs your yes",
+        )
+    )
     money = any(w in blob for w in ("pag", "preço", "price", "bolsa", "funding", "investimento"))
     concrete = (title.split(" - ")[0].split(" — ")[0]).strip()
     if len(concrete) > 90:
         concrete = concrete[:87] + "…"
     if primary == "pt":
         if work_hit:
-            return f"Impacto na meta de trabalho: {concrete}."
+            return "Tem a ver com a tua meta de trabalho."
         if life_hit:
-            return f"Mexe com a tua meta de vida: {concrete}."
+            return "Tem a ver com a tua meta de vida."
         if decide:
-            return f"Pode pedir uma decisão tua: {concrete}."
+            return "Isso envolve uma decisão de verdade — voto, aprovação, sim ou não."
         if urgent:
-            return f"Urgência — isto mexeu nas últimas horas: {concrete}."
+            return "Saiu nas últimas horas."
         if money:
-            return f"Tem efeito prático (dinheiro, custo, recurso): {concrete}."
-        return f"Novidade em {interest}: {concrete}."
+            return "Tem efeito prático de dinheiro ou custo."
+        return "É recente e está no que você acompanha."
     if work_hit:
-        return f"Hits the work goal: {concrete}."
+        return "This touches what you are doing at work."
     if life_hit:
-        return f"Hits the life goal: {concrete}."
+        return "This touches what you are doing in life."
     if decide:
-        return f"May need a call from you: {concrete}."
+        return "This is an actual choice — a vote, an approval, a yes or no."
     if urgent:
-        return f"Urgent — this moved in the last hours: {concrete}."
+        return "This moved in the last hours."
     if money:
-        return f"Practical stake (money, cost, resource): {concrete}."
-    return f"New in {interest}: {concrete}."
+        return "There is a practical money or cost stake."
+    return "It's recent and on what you follow."
 
 
 def _when(node: ET.Element) -> datetime | None:
@@ -549,51 +604,155 @@ def _line(title: str, source: str, link: str = "") -> str:
     return line
 
 
+_JUNK_TITLE = (
+    "criptomoeda",
+    "cripto ",
+    "crypto",
+    "forex",
+    "ikki-tousen",
+    "250 vezes",
+    "250x",
+    "notícias do dia no brasil",
+    "noticias do dia no brasil",
+    "notícias do dia no mundo",
+    "we're giving away",
+    "1 trillion tokens",
+    "trillion tokens",
+    "experiential labs",
+)
+
+
+def _search_queries(interests, goals, about) -> list[str]:
+    out = []
+    for interest in interests or []:
+        if (interest or "").strip():
+            out.append(interest.strip())
+    for value in (goals or {}).values():
+        words = [w for w in re.findall(r"[A-Za-zÀ-ÿ]{5,}", value or "")]
+        if words:
+            out.append(" ".join(words[:5]))
+    for item in about or []:
+        words = [w for w in re.findall(r"[A-Za-zÀ-ÿ]{5,}", item or "")]
+        if len(words) >= 2:
+            out.append(" ".join(words[:5]))
+        elif (item or "").strip():
+            out.append(item.strip())
+    seen = set()
+    unique = []
+    for query in out:
+        key = query.casefold()
+        if key in seen:
+            continue
+        seen.add(key)
+        unique.append(query)
+    return unique[:8]
+
+
+def _clip_rank(row: dict) -> int:
+    why = (row.get("why") or "").casefold()
+    score = 0
+    if "meta de trabalho" in why or "doing at work" in why:
+        score += 4
+    if "meta de vida" in why or "doing in life" in why:
+        score += 4
+    if "decisão de verdade" in why or "actual choice" in why:
+        score += 3
+    if "últimas horas" in why or "last hours" in why:
+        score += 2
+    if row.get("happened"):
+        score += 1
+    return score
+
+
+def _too_close(title: str, seen_titles: list[str]) -> bool:
+    words = set(re.findall(r"[a-zà-ÿ]{4,}", title.casefold()))
+    if len(words) < 3:
+        return False
+    for other in seen_titles:
+        other_w = set(re.findall(r"[a-zà-ÿ]{4,}", other))
+        if not other_w:
+            continue
+        if len(words & other_w) / min(len(words), len(other_w)) >= 0.55:
+            return True
+    return False
+
+
+def _skip_local(title: str, avoid_l: list[str]) -> bool:
+    if not any("local" in a for a in avoid_l):
+        return False
+    blob = title.casefold()
+    return any(bit in blob for bit in _LOCALISH)
+
+
 def clips(
     interests: list[str] | None,
     avoid: list[str] | None = None,
     language: str = "",
-    limit: int = 4,
+    limit: int = 8,
     now: datetime | None = None,
     goals: dict | None = None,
+    about: list[str] | None = None,
 ) -> list[dict]:
-    """A few recent pieces: what happened, and why it matches an interest."""
+    """Recent pieces scored against their goals — enough to fill a newspaper well."""
     avoid_l = [a.lower() for a in (avoid or []) if a]
     hl, gl, ceid = locale(language)
     found: list[dict] = []
     seen: set[str] = set()
-    for interest in [i.strip() for i in (interests or []) if i and i.strip()][:4]:
+    for interest in _search_queries(interests, goals, about):
         url = NEWS.format(q=urllib.parse.quote(interest), hl=hl, gl=gl, ceid=ceid)
         try:
             rows = _fresh(items(fetch(url)), now=now)
         except _NET:
             continue
-        for title, link, source, _image, description, source_url in rows:
+        for title, link, source, _image, description, source_url in rows[:6]:
             blob = f"{title} {source}".lower()
+            key = title.casefold()
             if any(term in blob for term in avoid_l):
                 continue
-            key = title.casefold()
-            if key in seen:
+            if _skip_local(title, avoid_l):
+                continue
+            if any(bit in key for bit in _JUNK_TITLE):
+                continue
+            if key in seen or _too_close(title, list(seen)):
                 continue
             seen.add(key)
             happened = first_sentences(description)
-            if echoes_title(happened, title) or len(happened) < 80:
-                try:
-                    happened = article_lede(link, source_url, title) or happened
-                except _NET:
-                    pass
-            happened = clean_lede(happened, title)
             found.append(
                 {
                     "title": title,
                     "source": source,
                     "happened": happened,
                     "why": why_matters(interest, language, title, happened, goals),
+                    "_link": link,
+                    "_source_url": source_url,
+                    "_query": interest,
                 }
             )
-            if len(found) >= limit:
-                return found
-    return found
+    found.sort(key=_clip_rank, reverse=True)
+    chosen: list[dict] = []
+    for row in found[: limit + 6]:
+        happened = row.get("happened") or ""
+        title = row["title"]
+        query = row.get("_query") or ((interests or ["news"])[0] if interests else "news")
+        if echoes_title(happened, title) or len(happened) < 160:
+            try:
+                happened = article_lede(row.get("_link") or "", row.get("_source_url") or "", title) or happened
+            except _NET:
+                pass
+            happened = clean_lede(happened, title)
+            if any(bit in (happened or "").casefold() for bit in _JUNK_LEDE):
+                happened = ""
+            row["happened"] = happened
+            row["why"] = why_matters(query, language, title, happened, goals)
+        row.pop("_link", None)
+        row.pop("_source_url", None)
+        row.pop("_query", None)
+        if len((row.get("happened") or "").strip()) < 40:
+            continue
+        chosen.append(row)
+        if len(chosen) >= limit:
+            break
+    return chosen
 
 
 _SKIP_CHARGE = (
@@ -612,23 +771,77 @@ def _charge_ok(title: str) -> bool:
     return not any(bit in blob for bit in _SKIP_CHARGE)
 
 
-def charge(language: str = "", now: datetime | None = None) -> list[dict]:
-    """One recent funny cartoon in the speaker's language, with image bytes when we can."""
+def _cartoon_hint(title: str, link: str = "", source: str = "") -> bool:
+    blob = f"{title} {link} {source}".casefold()
+    return any(hint in blob for hint in _TOON_HINT)
+
+
+def _usable_cartoon(blob: bytes) -> bool:
+    """Keep published drawings. Drop empty bytes, logos we already filtered, and photos of people."""
+    if not blob:
+        return False
+    return not cartoon_mod.looks_like_photo(blob)
+
+
+def _home_cartoon(language: str) -> dict | None:
+    """A strip from a real comic site, not a drawing we invented."""
     primary = tag(language).split("-")[0][:2] or "en"
+    homes = COMIC_HOMES.get(primary) or COMIC_HOMES["en"]
+    for home in homes:
+        try:
+            landed, page = fetch_page(home)
+        except _NET:
+            continue
+        if not page:
+            continue
+        title = ""
+        match = re.search(r"<title>([^<]+)</title>", page, re.I)
+        if match:
+            title = _plain(match.group(1)).split("|")[0].split("–")[0].split("—")[0].strip()
+        picture = b""
+        for src in image_candidates(page, landed or home):
+            try:
+                data = fetch_image(src)
+            except _NET:
+                continue
+            if usable_image(src, data) and _usable_cartoon(data):
+                picture = data
+                break
+        if not picture:
+            continue
+        host = urllib.parse.urlsplit(landed or home).netloc.replace("www.", "")
+        return {
+            "title": title or host,
+            "source": host,
+            "link": landed or home,
+            "line": _line(title or host, host),
+            "image": picture,
+        }
+    return None
+
+
+def charge(language: str = "", now: datetime | None = None) -> list[dict]:
+    """One recent funny cartoon from the web in the speaker's language."""
+    primary = tag(language).split("-")[0][:2] or "en"
+    home = _home_cartoon(language)
+    if home:
+        return [home]
     queries = [CARTOON_Q.get(primary, "funny comic")]
     if primary == "pt":
-        queries = ["tirinha humor", "charge humor", "charge do dia"]
+        queries = ["tirinha", "charge do dia", "tirinha do dia", "cartum humor", "quadrinho humor"]
     elif primary == "en":
-        queries = ["funny comic strip", "editorial cartoon funny"]
+        queries = ["funny comic strip", "comic strip today", "editorial cartoon funny"]
     hl, gl, ceid = locale(language)
-    picked = None
+    hinted: list[dict] = []
+    other: list[dict] = []
+    empty = None
     for query in queries:
         url = NEWS.format(q=urllib.parse.quote(query), hl=hl, gl=gl, ceid=ceid)
         try:
             rows = _fresh(items(fetch(url)), now=now, max_age=timedelta(hours=48))
         except _NET:
             continue
-        for title, link, source, rss_image, _desc, source_url in rows[:8]:
+        for title, link, source, rss_image, _desc, source_url in rows[:12]:
             if not _charge_ok(title):
                 continue
             try:
@@ -642,11 +855,18 @@ def charge(language: str = "", now: datetime | None = None) -> list[dict]:
                 "line": _line(title, source or query),
                 "image": picture,
             }
-            if picture:
-                return [row]
-            if picked is None:
-                picked = row
-    return [picked] if picked else []
+            if picture and _usable_cartoon(picture):
+                if _cartoon_hint(title, link, source):
+                    hinted.append(row)
+                else:
+                    other.append(row)
+            elif empty is None and not picture:
+                empty = row
+            if hinted:
+                return [hinted[0]]
+    if other:
+        return [other[0]]
+    return [empty] if empty else []
 
 
 def main() -> int:

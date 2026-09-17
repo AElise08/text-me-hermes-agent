@@ -108,8 +108,8 @@ class MatrixTests(unittest.TestCase):
             self.assertIn("Today in one sentence", md)
             self.assertNotIn("What needs you today", md)
             self.assertNotIn("Nothing in the inbox matches", md)
-            self.assertIn("Ship the Kindle edition", md)
-            self.assertEqual(md.count("Ship the Kindle edition"), 1)
+            self.assertIn("kindle edition", md.lower())
+            self.assertEqual(md.lower().count("ship the kindle edition"), 1)
             self.assertIn("morning edition", md)
             self.assertNotIn("A yes waiting in email", md)
             self.assertNotIn("bus to campus", md)
@@ -126,6 +126,10 @@ class MatrixTests(unittest.TestCase):
                 self.assertIn("mimetype", zf.namelist())
                 self.assertEqual(zf.read("mimetype"), b"application/epub+zip")
                 self.assertIn("OEBPS/PlayfairDisplay-Bold.ttf", zf.namelist())
+                self.assertIn("OEBPS/UnifrakturCook-Bold.ttf", zf.namelist())
+                body = zf.read("OEBPS/body.html").decode("utf-8")
+                self.assertIn('class="masthead"', body)
+                self.assertIn("The Text-me", body)
             e = {**os.environ, "HERMES_HOME": h}
             nudge = subprocess.check_output(["python3", str(NUDGE)], env=e, text=True)
             self.assertIn("Kindle", nudge)
@@ -347,7 +351,10 @@ class MatrixTests(unittest.TestCase):
         )
         self.assertIn("## Hoje em uma frase", md)
         self.assertLessEqual(md.count("mecânica dos fluidos"), 2)
-        self.assertIn("Mel, hoje o dia pende", md)
+        self.assertIn("Mel, hoje o que importa é", md)
+        self.assertIn("necessário: janela das 9h20 às 11h10", md)
+        self.assertNotIn("Mel precisa", md)
+        self.assertNotIn("até 2026-09-17", md)
         self.assertNotIn("## Não larga hoje", md)
         self.assertNotIn("## Blocos em andamento", md)
         self.assertNotIn("o usuário", md.lower())
@@ -500,7 +507,7 @@ class MatrixTests(unittest.TestCase):
             tones = 0
             for page in pages:
                 for px in page.resize((80, 110), PilImage.BOX).getdata():
-                    if max(px) - min(px) < 8 and sum(px) / 3 < 205:
+                    if px[0] > 140 and px[1] < 110 and px[2] < 110:
                         tones += 1
             self.assertGreater(tones, 0)
             self.assertTrue(Path(out["pdf"]).read_bytes().startswith(b"%PDF"))

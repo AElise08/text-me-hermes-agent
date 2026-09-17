@@ -24,6 +24,18 @@ class PdfTests(unittest.TestCase):
             self.assertIn(b"%%EOF", data[-16:])
             self.assertGreater(len(data), 2000)
 
+    def test_portuguese_chrome_is_not_english(self):
+        pdf = load("pdf_mod", "scripts/pdf.py")
+        copy = pdf.chrome("# Seu Reporte Diário — 17/09\n\n## Hoje em uma frase\n> Mel, hoje o que importa é fluidos.\n")
+        self.assertEqual(copy["masthead"], "The Text-me")
+        self.assertEqual(copy["todo"], "O que preciso fazer hoje")
+        self.assertNotIn("It's sorted", copy["tagline"])
+        self.assertNotIn("Times", copy["masthead"])
+        self.assertNotIn("Reporte", copy["masthead"])
+        en = pdf.chrome("# Your Daily Report — 17/09\n\n## Today in one sentence\n> Today hangs on shipping.\n")
+        self.assertEqual(en["masthead"], "The Text-me")
+        self.assertEqual(en["todo"], "What I need to do today")
+
     def test_charge_page_is_not_blank(self):
         from io import BytesIO
         from PIL import Image
@@ -36,11 +48,10 @@ class PdfTests(unittest.TestCase):
             {"charge-0.jpg": buf.getvalue()},
         )
         self.assertGreaterEqual(len(pages), 2)
-        paper = (247, 243, 234)
         tones = 0
         for page in pages:
             for px in page.resize((80, 110), Image.BOX).getdata():
-                if max(px) - min(px) < 8 and sum(px) / 3 < 205:
+                if px[0] > 140 and px[1] < 90 and px[2] < 90:
                     tones += 1
         self.assertGreater(tones, 8, "cartoon pixels missing from the PDF pages")
 

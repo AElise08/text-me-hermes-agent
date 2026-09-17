@@ -61,13 +61,20 @@ never tomorrow and never a date in `--extra-file`. Do not reprint their
 routine on the page. The briefing order is: today in one sentence →
 Agenda (timeline) → Decisions (3, with a deadline) → Risks → What
 changed → People (name, context, action) → Next actions (Q1 first,
-never by clock) → cartoon or word search. Each news clip says what
-happened and why it matters (urgency, impact, goals, novelty, a
-decision) — never "you asked to follow AI". Use their name, never
-"the user". The 5:55 tick runs `matriz.py edition`, which researches
-their interests itself (and a funny cartoon if `profile.charge` is on).
-`--extra-file` is only an override. The charge is the cartoon drawing
-on its own PDF page, not a Google News mark. Masthead is Playfair;
+never by clock) → cartoon or word search. Next actions talk to them
+(tu/you), never in the third person, and name a clock window when
+there is one ("necessário: janela das 9h20 às 11h10") instead of
+today's date. Each news clip says what happened in a paragraph and why
+it matters (urgency, impact, goals, novelty, a
+decision only when there is a real vote or yes/no) — never "you asked
+to follow AI" and never a fake "needs your decision" from the word
+"pode". Use their name on the cover line only, never "the user". Speak like a person ("hoje
+o que importa é"), never "pende". The 5:55 tick runs `matriz.py edition`,
+which researches their interests itself (and a funny cartoon if
+`profile.charge` is on). `--extra-file` is only an override. The charge
+is a cartoon published online, on its own PDF page — not a Google News
+mark and not a homemade strip. Masthead is The Text-me (Unifraktur) on
+the PDF and at the opening of the Kindle EPUB;
 body is Georgia / a readable sans; agenda numbers are tabular. Then
 readings from their list and hobbies they named. Printer: PDF to
 `--printer-email`, 10 minutes early. Commercial

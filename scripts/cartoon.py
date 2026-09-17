@@ -14,6 +14,44 @@ def _font(name, size):
                 return ImageFont.truetype(path, size)
     return ImageFont.load_default(size)
 
+
+def looks_like_photo(blob: bytes) -> bool:
+    """Photographs of real people, not ink drawings or tirinhas."""
+    if not blob:
+        return False
+    try:
+        image = Image.open(BytesIO(blob)).convert("RGB")
+    except (OSError, ValueError):
+        return False
+    sample = image.resize((80, 80), Image.BOX)
+    pixels = list(sample.getdata())
+    if not pixels:
+        return False
+    skin = 0
+    for r, g, b in pixels:
+        if (
+            r > 95
+            and g > 40
+            and b > 20
+            and r >= g >= b
+            and (r - g) < 70
+            and 15 < (r - b) < 130
+        ):
+            skin += 1
+    return skin / len(pixels) > 0.18
+
+
+def is_drawing(blob: bytes) -> bool:
+    """True for line art / tirinha; false for photographs and empty bytes."""
+    if not blob:
+        return False
+    try:
+        image = Image.open(BytesIO(blob)).convert("RGB")
+    except (OSError, ValueError):
+        return False
+    sample = image.resize((72, 72), Image.BOX)
+    return len(set(sample.getdata())) <= 900
+
 def original_daily_cartoon(language="pt"):
     im=Image.new("RGB",(1000,820),"white"); d=ImageDraw.Draw(im)
     font=_font("PlayfairDisplay-Regular", 25)

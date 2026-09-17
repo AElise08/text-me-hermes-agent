@@ -59,7 +59,8 @@ class ResearchTests(unittest.TestCase):
         self.assertTrue(all("economia" not in t.lower() for t in titles))
         self.assertTrue(all("velha" not in t.lower() for t in titles))
         self.assertIn("escola", out[0]["happened"].lower())
-        self.assertIn("IA", out[0]["why"])
+        self.assertNotIn("Pediste", out[0]["why"])
+        self.assertNotIn("Pode pedir", out[0]["why"])
         self.assertTrue(all("https://" not in x["title"] for x in out))
 
     def test_why_matters_scores_goals_and_decisions(self):
@@ -82,6 +83,16 @@ class ResearchTests(unittest.TestCase):
             goals={},
         )
         self.assertIn("decisão", decide)
+        scare = research.why_matters(
+            "IA",
+            "pt",
+            title="A IA pode exterminar a humanidade?",
+            happened="Um relatório fala de risco existencial.",
+            goals={},
+        )
+        self.assertNotIn("decisão", scare)
+        self.assertNotIn("Pode pedir", scare)
+        self.assertNotIn("Pediste", scare)
 
     def test_undated_and_stale_are_not_shown(self):
         research = load()
@@ -102,7 +113,7 @@ class ResearchTests(unittest.TestCase):
             with patch.object(research, "article_lede", return_value="A lab shipped a fresh model this morning."):
                 out = research.clips(["AI"], language="de", now=NOW)
         self.assertEqual([x["title"] for x in out], ["Fresh model ships"])
-        self.assertIn("AI", out[0]["why"])
+        self.assertNotIn("May need a call", out[0]["why"])
         self.assertIn("model", out[0]["happened"])
         self.assertTrue(captured)
         self.assertIn("hl=de", captured[0])
@@ -129,9 +140,10 @@ class ResearchTests(unittest.TestCase):
             captured.append(url)
             return payload
 
-        with patch.object(research, "fetch", side_effect=fake_fetch):
-            with patch.object(research, "image_for", return_value=b""):
-                out = research.charge("de", now=NOW)
+        with patch.object(research, "_home_cartoon", return_value=None):
+            with patch.object(research, "fetch", side_effect=fake_fetch):
+                with patch.object(research, "image_for", return_value=b""):
+                    out = research.charge("de", now=NOW)
         self.assertEqual(len(out), 1)
         self.assertEqual(out[0]["title"], "Karikatur am Morgen")
         self.assertIn("https://ex.test/toon", out[0]["link"])
@@ -178,6 +190,31 @@ class ResearchTests(unittest.TestCase):
         self.assertTrue(research.googleish("https://news.google.com/rss/articles/x"))
         self.assertFalse(research.article_href("https://www.google-analytics.com/analytics.js"))
         self.assertTrue(research.article_href("https://atarde.com.br/charges/charge-do-dia-17092026"))
+
+    def test_charge_keeps_a_color_web_cartoon(self):
+        research = load()
+        from io import BytesIO
+        from PIL import Image
+
+        strip = Image.new("RGB", (640, 360))
+        pix = strip.load()
+        for x in range(640):
+            for y in range(360):
+                pix[x, y] = ((x * 7) % 256, 40 + (y * 3) % 180, 200)
+        buf = BytesIO()
+        strip.save(buf, format="JPEG")
+        picture = buf.getvalue()
+        self.assertFalse(research.cartoon_mod.is_drawing(picture))
+        payload = rss(
+            [("Tirinha do dia no jornal", "https://paper.test/tira", "Jornal", NOW - timedelta(hours=1))]
+        )
+        with patch.object(research, "_home_cartoon", return_value=None):
+            with patch.object(research, "fetch", return_value=payload):
+                with patch.object(research, "image_for", return_value=picture):
+                    out = research.charge("pt", now=NOW)
+        self.assertEqual(len(out), 1)
+        self.assertEqual(out[0]["image"], picture)
+        self.assertIn("Tirinha", out[0]["title"])
 
 
 if __name__ == "__main__":

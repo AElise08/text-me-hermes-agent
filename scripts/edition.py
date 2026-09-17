@@ -57,18 +57,22 @@ _IMG = re.compile(r"!\[([^\]]*)\]\(([^)]+)\)")
 
 _FONT_DIR = Path(__file__).resolve().parent.parent / "fonts"
 _PAPER_CSS = (
+    "@font-face{font-family:Textme;src:url(UnifrakturCook-Bold.ttf)}"
     "@font-face{font-family:Masthead;src:url(PlayfairDisplay-Bold.ttf);font-weight:700}"
     "@font-face{font-family:Masthead;src:url(PlayfairDisplay-Regular.ttf);font-weight:400}"
     "body{font-family:Georgia,'Palatino Linotype',serif;font-size:1.05em;line-height:1.65;"
     "margin:1em 1.15em;color:#1a1a1a}"
-    "h1{font-family:Masthead,Didot,Bodoni,serif;font-size:2.15em;font-weight:700;"
-    "text-align:center;letter-spacing:.02em;line-height:1.08;"
+    "p.masthead{font-family:Textme,serif;font-size:2.7em;text-align:center;"
+    "margin:.15em 0 .05em;line-height:1.05;color:#111}"
+    "p.tagline{text-align:center;font-style:italic;font-size:.82em;margin:0 0 .35em;color:#444}"
+    "h1{font-family:Georgia,'Palatino Linotype',serif;font-size:1.35em;font-weight:700;"
+    "text-align:center;letter-spacing:.02em;line-height:1.2;"
     "border-top:4px double #111;border-bottom:1px solid #111;"
-    "padding:.12em 0 .18em;margin:0}"
+    "padding:.18em 0 .2em;margin:0}"
     "p.folio{text-align:center;font-variant:small-caps;letter-spacing:.16em;font-size:.78em;"
     "line-height:1.35;margin:.4em 0 1em;border-bottom:4px double #111;padding-bottom:.5em;"
     "font-family:Georgia,serif}"
-    "h2{font-family:Masthead,Didot,serif;font-size:.82em;letter-spacing:.22em;font-weight:700;"
+    "h2{font-family:Georgia,serif;font-size:.78em;letter-spacing:.18em;font-weight:700;"
     "text-transform:uppercase;text-align:center;"
     "border-top:2px solid #111;border-bottom:1px solid #111;"
     "padding:.28em 0;margin:1.55em 0 .5em}"
@@ -83,7 +87,7 @@ _PAPER_CSS = (
 
 def font_files() -> list[tuple[str, bytes, str]]:
     out: list[tuple[str, bytes, str]] = []
-    for name in ("PlayfairDisplay-Bold.ttf", "PlayfairDisplay-Regular.ttf"):
+    for name in ("UnifrakturCook-Bold.ttf", "PlayfairDisplay-Bold.ttf", "PlayfairDisplay-Regular.ttf"):
         path = _FONT_DIR / name
         if not path.exists():
             path = Path("/opt/matriz/fonts") / name
@@ -93,8 +97,18 @@ def font_files() -> list[tuple[str, bytes, str]]:
 
 
 def md_to_html(md: str) -> str:
+    pt = any(
+        bit in md.casefold()
+        for bit in ("reporte", "hoje em uma frase", "próximas", "charge do dia")
+    )
+    tagline = (
+        "Teus planos no papel, pra não ter que guardar na cabeça."
+        if pt
+        else "Your plans on paper, so you don't have to keep them in your head."
+    )
     lines = []
     prev = ""
+    masthead = False
     for raw in md.splitlines():
         line = raw
         stripped_raw = raw.strip()
@@ -120,6 +134,10 @@ def md_to_html(md: str) -> str:
             lines.append(f"<h2>{line[3:]}</h2>")
             prev = "h2"
         elif line.startswith("# "):
+            if not masthead:
+                lines.append('<p class="masthead">The Text-me</p>')
+                lines.append(f'<p class="tagline">{html.escape(tagline)}</p>')
+                masthead = True
             lines.append(f"<h1>{line[2:]}</h1>")
             prev = "h1"
         elif stripped_raw.startswith("- "):
@@ -246,11 +264,16 @@ def first_name(state: dict) -> str:
 
 
 def voice(text: str, state: dict, pt: bool) -> str:
-    """Never 'the user'. Use the name we have, or tu/you."""
-    you = first_name(state) or ("tu" if pt else "you")
+    """Body copy talks to them (tu/you). Never 'the user', never their name in the third person."""
+    you = "tu" if pt else "you"
     out = re.sub(r"\b(?:[ao] |d[ao] )?usuário\b", you, text or "", flags=re.I)
     out = re.sub(r"\b(?:the )?user\b", you, out, flags=re.I)
-    return out
+    name = first_name(state)
+    if name:
+        out = re.sub(rf"\b{re.escape(name)}\b", "", out, flags=re.I)
+    out = re.sub(r"\s{2,}", " ", out)
+    out = re.sub(r"\s+,", ",", out)
+    return out.strip(" ,")
 
 
 def _mins(hhmm: str) -> int | None:
@@ -385,11 +408,15 @@ def kicker_line(state: dict, extra: dict, active: list[dict], pt: bool) -> str:
         core = str(meetings[0]).split("  ", 1)[-1]
     else:
         core = "o que está na mesa" if pt else "what is on the plate"
+    core = core.strip()
+    first = core.split()[0] if core else ""
+    if first and first[0].isupper() and not first.isupper():
+        core = core[0].lower() + core[1:]
     if pt:
         who = f"{name}, " if name else ""
-        return f"{who}hoje o dia pende para {core}."
+        return f"{who}hoje o que importa é {core}."
     who = f"{name}, " if name else ""
-    return f"{who}today hangs on {core}."
+    return f"{who}today the focus is {core}."
 
 
 def unique_push(shown: list[str], text: str) -> bool:
@@ -399,8 +426,62 @@ def unique_push(shown: list[str], text: str) -> bool:
     return True
 
 
-def focus_lines(active: list[dict], pt: bool) -> list[str]:
-    """What matters, in order of what matters — Q1 first, never by clock."""
+def _clocks_in(text: str) -> list[str]:
+    found: list[str] = []
+    seen: set[str] = set()
+    for raw in re.findall(r"\b\d{1,2}h\d{2}\b|\b\d{1,2}:\d{2}\b", text or ""):
+        if "h" in raw.casefold() and ":" not in raw:
+            h, m = raw.casefold().split("h", 1)
+            stamp = f"{int(h):02d}:{m}"
+        else:
+            h, m = raw.split(":", 1)
+            stamp = f"{int(h):02d}:{m}"
+        if stamp in seen:
+            continue
+        seen.add(stamp)
+        found.append(stamp)
+    return found
+
+
+def _show_clock(hhmm: str, pt: bool) -> str:
+    h, m = hhmm.split(":")
+    return f"{int(h)}h{m}" if pt else hhmm
+
+
+def _task_window(task: dict, meetings: list | None) -> tuple[str, str] | None:
+    tokens = [w for w in re.findall(r"[a-zà-ÿ]{4,}", (task.get("text") or "").casefold())]
+    for raw in meetings or []:
+        match = _SLOT.match(str(raw).strip())
+        if not match:
+            continue
+        title = match.group(3).casefold()
+        if tokens and sum(1 for w in tokens if w in title) >= min(2, len(tokens)):
+            return match.group(1), match.group(2)
+    clocks = _clocks_in(task.get("reason") or "")
+    if len(clocks) >= 2:
+        return clocks[0], clocks[1]
+    return None
+
+
+def _due_stamp(task: dict, when: datetime | None, pt: bool) -> str:
+    due = (task.get("due") or "").strip()
+    if not due or when is None:
+        return ""
+    try:
+        if due[:10] == when.date().isoformat():
+            return ""
+    except (TypeError, ValueError):
+        pass
+    return ("até " if pt else "due ") + due
+
+
+def focus_lines(
+    active: list[dict],
+    pt: bool,
+    when: datetime | None = None,
+    meetings: list | None = None,
+) -> list[str]:
+    """What matters, in order — Q1 first. A window if we have one, never third person."""
     ranked = sorted(
         active,
         key=lambda t: (
@@ -411,12 +492,55 @@ def focus_lines(active: list[dict], pt: bool) -> list[str]:
     )
     out = []
     for task in ranked[:6]:
-        bits = [f"{task.get('quadrant', '')} {task.get('text', '')}".strip()]
-        if (task.get("due") or "").strip():
-            bits.append(("até " if pt else "due ") + task["due"].strip())
-        if (task.get("reason") or "").strip():
-            bits.append(task["reason"].strip())
-        out.append(" — ".join(bits))
+        bits = [re.sub(r"^Q[1-4]\s+", "", (task.get("text") or "").strip())]
+        window = _task_window(task, meetings)
+        if window:
+            start, end = _show_clock(window[0], pt), _show_clock(window[1], pt)
+            bits.append(
+                f"necessário: janela das {start} às {end}"
+                if pt
+                else f"needed: window {start}–{end}"
+            )
+        else:
+            extra_due = _due_stamp(task, when, pt)
+            if extra_due:
+                bits.append(extra_due)
+            reason = (task.get("reason") or "").strip()
+            blob = reason.casefold()
+            if (
+                reason
+                and len(reason) <= 80
+                and not any(
+                    w in blob
+                    for w in ("precisa", "só tem", "so tem", "usuário", "usuario", "the user")
+                )
+            ):
+                bits.append(reason)
+        out.append(" — ".join(b for b in bits if b))
+    return out
+
+
+def _day_musts(meetings: list | None, pt: bool, shown: list[str]) -> list[str]:
+    """The day's real commitments, minus commute and meals already on the agenda."""
+    skip_w = (
+        "desloc", "volta pra", "volta para", "commute", "ônibus", "onibus",
+        "almoço", "almoco", "lunch", "café", "cafe da",
+    )
+    out = []
+    for raw in meetings or []:
+        match = _SLOT.match(str(raw).strip())
+        if not match:
+            continue
+        start, end, title = match.group(1), match.group(2), match.group(3).strip()
+        title = re.sub(r"\s+·\s+.*$", "", title).strip()
+        if any(w in title.casefold() for w in skip_w):
+            continue
+        start_s, end_s = _show_clock(start, pt), _show_clock(end, pt)
+        line = f"{title} — {start_s} às {end_s}" if pt else f"{title} — {start_s}–{end_s}"
+        if unique_push(shown, line):
+            out.append(line)
+        if len(out) >= 5:
+            break
     return out
 
 
@@ -484,6 +608,8 @@ def _clip_block(item, pt: bool) -> list[str]:
         if source and source.casefold() not in line.casefold():
             line = f"{line} — {source}"
         return [f"- {line}"] if line else []
+    if happened and len(happened) < 40:
+        return []
     out = [f"### {title}"] if title else []
     if happened:
         out.append(("O que aconteceu: " if pt else "What happened: ") + happened)
@@ -515,8 +641,6 @@ def compose(state: dict, when: datetime, extra: dict | None = None) -> str:
         lines.append("## Agenda")
         lines.extend(rows)
         lines.append("")
-        for row in rows:
-            unique_push(shown, row)
 
     decisions = extra.get("approvals") or extra.get("decisions") or []
     dec_lines = []
@@ -581,14 +705,19 @@ def compose(state: dict, when: datetime, extra: dict | None = None) -> str:
         lines.append("")
 
     next_lines = []
-    ranked = extra.get("focus") or focus_lines(active, pt)
+    ranked = extra.get("focus") or focus_lines(active, pt, when, meetings)
     for item in ranked:
         text = voice(str(item), state, pt)
         text = re.sub(r"^Q[1-4]\s+", "", text)
         if unique_push(shown, text):
             next_lines.append(f"- {text}")
-        if len(next_lines) >= 4:
+        if len(next_lines) >= 5:
             break
+    if not extra.get("focus"):
+        for line in _day_musts(meetings, pt, shown):
+            next_lines.append(f"- {line}")
+            if len(next_lines) >= 6:
+                break
     next_lines.extend(delay_notes(state, pt))
     if next_lines:
         lines.append("## " + ("Próximas ações" if pt else "Next actions"))
@@ -598,7 +727,7 @@ def compose(state: dict, when: datetime, extra: dict | None = None) -> str:
     radar = extra.get("clips") or []
     if radar:
         lines.append("## " + ("No radar" if pt else "On the radar"))
-        for item in radar[:3]:
+        for item in radar[:8]:
             lines.extend(_clip_block(item, pt))
         lines.append("")
 

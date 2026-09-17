@@ -1,5 +1,7 @@
 # text-me
 
+[![text-me](https://img.youtube.com/vi/gNqeiYawhhE/hqdefault.jpg)](https://youtu.be/gNqeiYawhhE)
+
 **Dump your list. Get one next step — in iMessage.**
 
 Install text-me, mint a Plow Chat line, and you get a phone number. Text it
@@ -41,9 +43,10 @@ job template.
   pickup — every clock you named lands on Google Calendar in that turn, not
   just the one free window. One command reads the whole message.
 - **A time block that learns.** "I need 45 minutes to edit a video." If you
-  say ok, it books the calendar. If you then say "20 more," that extension is
-  the real duration — next time it reserves what the work actually took, not
-  the guess.
+  say ok, it books the calendar. If it runs long and you text "mais 20" or
+  "terminei agora, levou mais," that is the real duration — next time it
+  reserves what the work actually took, not the guess. If you finish on time,
+  you don't have to do anything.
 - **After this, then that.** "After the launch" + the link: it reads a date
   the page actually contains. "When the previous one closes" waits. It answers
   in whatever language you (or the other person) wrote.

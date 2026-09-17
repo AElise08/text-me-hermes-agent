@@ -23,7 +23,6 @@ import gmail as gmail_mod  # noqa: E402
 import overnight as overnight_mod  # noqa: E402
 import printer as printer_mod  # noqa: E402
 import research as research_mod  # noqa: E402
-import cartoon as cartoon_mod  # noqa: E402
 
 CATS = ("work", "life")
 LANES = ("work", "life", "reading", "hobby")
@@ -680,11 +679,14 @@ def main() -> None:
             except SystemExit:
                 extra["meetings"] = extra.get("meetings") or []
         used = " ".join((extra.get("readings") or []) + (extra.get("hobbies") or [])).lower()
+        about = [t.get("text") or "" for t in data.get("tasks") or [] if not t.get("done")][:4]
         web = research_mod.clips(
             profile.get("interests") or [],
             profile.get("avoid") or [],
             lang,
+            limit=9,
             goals=data.get("goals") or {},
+            about=about,
         )
         merged = []
         seen = set()
@@ -703,9 +705,10 @@ def main() -> None:
                 continue
             seen.add(key)
             merged.append(item)
-        extra["clips"] = merged[:6]
+        extra["clips"] = merged[:9]
         if profile.get("charge"):
-            extra["charge"] = research_mod.charge(lang) or [cartoon_mod.original_daily_cartoon(lang)]
+            found = research_mod.charge(lang)
+            extra["charge"] = found or []
         if args.extra_file:
             researched = json.loads(Path(args.extra_file).read_text(encoding="utf-8"))
             for key in ("title", "focus", "clips", "readings", "hobbies", "charge", "meetings", "people", "kicker", "approvals", "decisions", "exceptions"):
