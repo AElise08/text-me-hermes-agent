@@ -31,15 +31,28 @@ If a fact would change the order, it asks; otherwise it proposes.
 
 ## Use cases
 
-- **Dump the list.** Text everything on your plate, one task per line or in
-  a paragraph. text-me classifies each as life or work, then Q1–Q4
-  (important × urgent), and ends with **one** start: "Começa por X porque…"
-- **A morning nudge on your phone.** At 09:00 in your timezone it texts first:
-  today's life focus and work focus, plus what is important even if it is
-  not urgent. Empty state: it asks that question and waits.
-- **Protect the week, not the inbox.** One weekly goal per sphere (life /
-  work). A new yes costs time of something else — it compares before you
-  take it on.
+- **Dump the list.** Text everything on your plate. text-me classifies life vs
+  work, Q1–Q4, and ends with **one** start.
+- **Dump the day, get the whole grid.** "Class 7:30, free 9:20–11:10, physio
+  at 3" — every interval you named lands on Google Calendar in that turn, not
+  just the one block it proposed.
+- **A time block that learns.** "I need 45 minutes to edit a video." If you
+  say ok, it books the calendar. If you then say "20 more," that extension is
+  the real duration — next time it reserves what the work actually took, not
+  the guess.
+- **After this, then that.** "After the hackathon" + the link: it reads a date
+  the page actually contains. "When the previous one closes" waits. It answers
+  in whatever language you (or the other person) wrote.
+- **"Seu Report Diário" on your Kindle.** Every morning: what needs you
+  (a bill to pay is a reminder even from a noreply), calendar changes already
+  applied, a yes waiting in email, the one thing not to drop — then your
+  readings and hobbies, apart. "What matters today" is ordered by importance,
+  never by clock, each line with a short why. Kindle, printer, email, or chat.
+- **It learns who you are.** Say "follow-up of an investor" once and it saves
+  that as work; a book list becomes readings; piano becomes a hobby. Correct
+  it once and the item moves. No keyword lists to configure — Gmail and
+  Calendar work over Plow's connectors, no Mac required.
+- **SMS and iPhone both work.** Text the line from any phone that can SMS.
 
 ## Install
 
@@ -65,6 +78,13 @@ and `mint`.
 
 `plow-credentials` and `.env` are gitignored. Do not commit them.
 
+For Google Calendar and Gmail: connect Google at <https://app.plow.co> →
+Connectors. No Mac and no Latch required. After `plow-agents login`, point
+compose at the account token (`~/.config/plow/token`) as in
+`compose.override.example.yml`. The agent token from `mint` cannot talk to
+Google; the login token can. That same path **reads the inbox** and **sends**
+mail (daily edition → Kindle).
+
 ## How to use it
 
 After `plow-agents mint`, open **Messages** on your iPhone and text the number
@@ -77,9 +97,7 @@ on that line.
 2. **Dump, then start.** Send the list. It proposes an order and one next
    step. Correct it in the thread ("that's life, not work", "no deadline")
    — it will reclassify instead of guessing.
-3. **Daily nudge** (default 09:00): it texts *you* first. Set timezone with
-   `TZ` in `compose.override.yml` (IANA name, e.g. `America/Belem`). Until
-   you set one, the nudge uses `America/Belem`.
+3. **Daily edition** at the hour they chose (`profile set --edition-hour 6` means **in their hand** at 06:00). Kindle is mailed at 05:55. Set timezone with `TZ` in `compose.override.yml` (IANA name, e.g. `America/Belem`). Until you set one, it uses `America/Belem`.
 
 ```sh
 cp compose.override.example.yml compose.override.yml
@@ -96,21 +114,25 @@ plow-agents revoke           # retire the line in plow-credentials
 Goals and tasks live in the agent home volume (`.matriz/state.json`). Only
 on this install; `down -v` wipes them.
 
-## Calendar (optional)
+## Calendar, Gmail, Kindle
 
-text-me can ground priorities in the owner's real calendar. Connect Google
-at <https://app.plow.co> → Connectors. The agent never asks for a Google
-password or API key. The Plow relay on the owner's machine must be online.
+Connect Google at <https://app.plow.co> → Connectors. Calendar **and Gmail**
+work **without Latch and without a Mac**: mount `~/.config/plow/token` (from
+`plow-agents login`) into the container. `connectors.py` / `gcal.py status`
+should show `connected: true`.
 
-With the connector up it can read the next day or two and — with explicit
-consent in the same conversation — block focus time. Without it, send
-deadlines in the text.
-
-Inside the container:
+The daily edition is EPUB (Kindle) and PDF (printer). If you chose Kindle,
+set your Send-to-Kindle address in chat. If you chose printer, set the
+printer's own email (HP ePrint, Epson Connect, Brother) — same Gmail send,
+already working — or an IPP URI when this computer can see the printer.
+Commercial ebooks: store link only.
 
 ```sh
-python3 /var/lib/hermes/scripts/plow_tools.py            # every tool
-python3 /var/lib/hermes/scripts/plow_tools.py --calendar # calendar only
+python3 /var/lib/hermes/scripts/connectors.py
+python3 /var/lib/hermes/scripts/gcal.py today
+python3 /var/lib/hermes/scripts/gmail.py list
+python3 /var/lib/hermes/scripts/gmail.py kindle --to you@kindle.com --epub /path/day.epub
+python3 /var/lib/hermes/scripts/printer.py probe
 ```
 
 ## Usage reporting

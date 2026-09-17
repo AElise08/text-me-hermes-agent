@@ -1,0 +1,9 @@
+#!/command/with-contenv sh
+# Account token from plow-agents login, for REST Calendar/Gmail without Latch.
+set -eu
+file=/var/lib/plow/account.token
+envdir=/run/s6/container_environment
+if [ -s "$file" ]; then
+  tr -d '\n' < "$file" > "$envdir/PLOW_CONNECTOR_TOKEN"
+  chmod 600 "$envdir/PLOW_CONNECTOR_TOKEN"
+fi

@@ -16,3 +16,4 @@ RUN set -eu; \
     [ "$got" = "$want" ]; chmod 0644 /opt/plow/agent-index-client.py
 COPY image/s6-overlay/ /etc/s6-overlay/
 COPY --chmod=0755 image/cont-init.d/20-matriz-seed /etc/cont-init.d/20-matriz-seed
+COPY --chmod=0755 image/cont-init.d/25-connector-token /etc/cont-init.d/25-connector-token

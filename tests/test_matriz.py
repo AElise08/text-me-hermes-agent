@@ -1,19 +1,288 @@
-import json,os,subprocess,tempfile,unittest
+import json, os, subprocess, tempfile, unittest, zipfile
+from datetime import datetime, timezone
 from pathlib import Path
-ROOT=Path(__file__).resolve().parents[1]; SCRIPT=ROOT/'scripts'/'matriz.py'; NUDGE=ROOT/'scripts'/'morning_nudge.py'
+
+ROOT = Path(__file__).resolve().parents[1]
+SCRIPT = ROOT / "scripts" / "matriz.py"
+NUDGE = ROOT / "scripts" / "morning_nudge.py"
+DATES = ROOT / "scripts" / "dates.py"
+
+
 class MatrixTests(unittest.TestCase):
- def cli(self,h,*a):return json.loads(subprocess.check_output(['python3',str(SCRIPT),*a],env={**os.environ,'HERMES_HOME':h},text=True))
- def test_life_work_quadrants_goals_and_morning(self):
-  with tempfile.TemporaryDirectory() as h:
-   self.cli(h,'goal','set','--category','work','--text','Ship');self.cli(h,'goal','set','--category','life','--text','Sleep')
-   w=self.cli(h,'add','--text','report','--category','work','--important','yes','--urgent','yes')['created'];l=self.cli(h,'add','--text','walk','--category','life','--important','yes','--urgent','no')['created']
-   show=self.cli(h,'show');self.assertEqual(show['goals'],{'work':'Ship','life':'Sleep'});self.assertEqual(show['categories']['work']['Q1'][0]['id'],w['id']);self.assertEqual(show['categories']['life']['Q2'][0]['id'],l['id'])
-   m=self.cli(h,'morning');self.assertEqual(m['categories']['work']['do_now'][0]['text'],'report');self.assertEqual(m['categories']['life']['protect_next'][0]['text'],'walk')
- def test_nudge_empty_and_pt(self):
-  with tempfile.TemporaryDirectory() as h:
-   e={**os.environ,'HERMES_HOME':h};out=subprocess.check_output(['python3',str(NUDGE)],env=e,text=True);self.assertIn('most important',out);self.assertIn('mais importante',out)
-   self.cli(h,'language','set','pt');out=subprocess.check_output(['python3',str(NUDGE)],env=e,text=True);self.assertIn('mais importante',out)
- def test_update_category(self):
-  with tempfile.TemporaryDirectory() as h:
-   x=self.cli(h,'add','--text','x','--category','work','--important','no','--urgent','yes')['created'];y=self.cli(h,'update',x['id'],'--category','life','--important','yes','--urgent','no')['updated'];self.assertEqual((y['category'],y['quadrant']),('life','Q2'))
-if __name__=='__main__':unittest.main()
+    def cli(self, h, *a):
+        return json.loads(
+            subprocess.check_output(
+                ["python3", str(SCRIPT), *a],
+                env={**os.environ, "HERMES_HOME": h},
+                text=True,
+            )
+        )
+
+    def test_life_work_quadrants_goals_and_morning(self):
+        with tempfile.TemporaryDirectory() as h:
+            self.cli(h, "goal", "set", "--category", "work", "--text", "Ship")
+            self.cli(h, "goal", "set", "--category", "life", "--text", "Sleep")
+            w = self.cli(
+                h, "add", "--text", "report", "--category", "work",
+                "--important", "yes", "--urgent", "yes",
+            )["created"]
+            l = self.cli(
+                h, "add", "--text", "walk", "--category", "life",
+                "--important", "yes", "--urgent", "no",
+            )["created"]
+            show = self.cli(h, "show")
+            self.assertEqual(show["goals"], {"work": "Ship", "life": "Sleep"})
+            self.assertEqual(show["categories"]["work"]["Q1"][0]["id"], w["id"])
+            self.assertEqual(show["categories"]["life"]["Q2"][0]["id"], l["id"])
+            m = self.cli(h, "morning")
+            self.assertEqual(m["categories"]["work"]["do_now"][0]["text"], "report")
+            self.assertEqual(m["categories"]["life"]["protect_next"][0]["text"], "walk")
+
+    def test_nudge_empty_and_pt(self):
+        with tempfile.TemporaryDirectory() as h:
+            e = {**os.environ, "HERMES_HOME": h}
+            out = subprocess.check_output(["python3", str(NUDGE)], env=e, text=True)
+            self.assertIn("most important", out)
+            self.assertIn("mais importante", out)
+            self.cli(h, "language", "set", "pt")
+            out = subprocess.check_output(["python3", str(NUDGE)], env=e, text=True)
+            self.assertIn("mais importante", out)
+
+    def test_update_category(self):
+        with tempfile.TemporaryDirectory() as h:
+            x = self.cli(
+                h, "add", "--text", "x", "--category", "work",
+                "--important", "no", "--urgent", "yes",
+            )["created"]
+            y = self.cli(
+                h, "update", x["id"], "--category", "life",
+                "--important", "yes", "--urgent", "no",
+            )["updated"]
+            self.assertEqual((y["category"], y["quadrant"]), ("life", "Q2"))
+
+    def test_duration_learns_from_extensions(self):
+        with tempfile.TemporaryDirectory() as h:
+            first = self.cli(
+                h, "duration", "suggest", "--activity", "editar video", "--asked", "45"
+            )
+            self.assertEqual(first["suggested_minutes"], 45)
+            block = self.cli(
+                h, "block", "start", "--text", "editar video", "--minutes", "45"
+            )["created"]
+            self.cli(h, "block", "extend", block["id"], "--minutes", "20")
+            self.cli(h, "block", "extend", block["id"], "--minutes", "20")
+            self.cli(h, "block", "extend", block["id"], "--minutes", "20")
+            closed = self.cli(h, "block", "close", block["id"])
+            self.assertEqual(closed["updated"]["actual_minutes"], 105)
+            again = self.cli(
+                h, "duration", "suggest", "--activity", "editar video", "--asked", "45"
+            )
+            self.assertGreaterEqual(again["suggested_minutes"], 45)
+            second = self.cli(
+                h, "block", "start", "--text", "editar video", "--minutes", "45"
+            )
+            self.assertTrue(second["used_learned_duration"])
+            self.assertGreater(second["created"]["planned_minutes"], 45)
+
+    def test_commit_reads_date_from_html_never_invents(self):
+        with tempfile.TemporaryDirectory() as h:
+            html = "<html><body>Hackathon ends on September 23, 2026. Kickoff was 2026-01-01.</body></html>"
+            created = self.cli(
+                h, "commit", "add", "--text", "depois do hackathon", "--html", html
+            )["created"]
+            self.assertEqual(created["mode"], "after_url")
+            self.assertTrue(created["after_when"].startswith("2026-09-23"))
+            empty = self.cli(
+                h, "commit", "add", "--text", "depois", "--html", "<p>no dates here</p>"
+            )["created"]
+            self.assertEqual(empty["after_when"], "")
+            self.assertEqual(empty["dates"], [])
+
+    def test_edition_writes_epub_and_respects_kindle_delivery(self):
+        with tempfile.TemporaryDirectory() as h:
+            self.cli(h, "profile", "set", "--delivery", "kindle", "--routine", "bus to campus")
+            self.cli(h, "language", "set", "en")
+            self.cli(h, "goal", "set", "--category", "work", "--text", "Ship the Kindle edition")
+            out = self.cli(h, "edition", "--no-send")
+            md = Path(out["markdown"]).read_text(encoding="utf-8")
+            self.assertIn("What needs you today", md)
+            self.assertIn("Do not drop today", md)
+            self.assertIn("Work: Ship the Kindle edition", md)
+            self.assertIn("A yes waiting in email", md)
+            epub = Path(out["epub"])
+            pdf = Path(out["pdf"])
+            self.assertEqual(out["delivery"], "kindle")
+            self.assertNotIn("sent", out)
+            self.assertTrue(epub.exists())
+            self.assertTrue(pdf.exists())
+            self.assertTrue(pdf.read_bytes().startswith(b"%PDF"))
+            self.assertTrue(epub.exists())
+            with zipfile.ZipFile(epub) as zf:
+                self.assertIn("mimetype", zf.namelist())
+                self.assertEqual(zf.read("mimetype"), b"application/epub+zip")
+            e = {**os.environ, "HERMES_HOME": h}
+            nudge = subprocess.check_output(["python3", str(NUDGE)], env=e, text=True)
+            self.assertIn("Kindle", nudge)
+
+    def test_profile_setup(self):
+        with tempfile.TemporaryDirectory() as h:
+            p = self.cli(
+                h, "profile", "set",
+                "--delivery", "printer",
+                "--interests", "films, series",
+                "--avoid", "violence",
+                "--done",
+            )["profile"]
+            self.assertTrue(p["setup_done"])
+            self.assertEqual(p["delivery"], "printer")
+            self.assertEqual(p["avoid"], ["violence"])
+
+    def test_learn_saves_investor_as_work_and_correction_moves_it(self):
+        with tempfile.TemporaryDirectory() as h:
+            saved = self.cli(
+                h, "learn", "add", "--sphere", "work",
+                "--text", "follow-up of an investor",
+            )
+            self.assertEqual(saved["learned"]["sphere"], "work")
+            show = self.cli(h, "learn", "show")
+            self.assertEqual(show["known"]["work"][0]["text"], "follow-up of an investor")
+            self.cli(
+                h, "learn", "add", "--sphere", "life",
+                "--text", "follow-up of an investor",
+            )
+            moved = self.cli(h, "learn", "show")
+            self.assertEqual(moved["known"]["work"], [])
+            self.assertEqual(moved["known"]["life"][0]["text"], "follow-up of an investor")
+
+    def test_slot_saves_the_whole_day_not_one_block(self):
+        with tempfile.TemporaryDirectory() as h:
+            aula = self.cli(
+                h, "slot", "add",
+                "--text", "Aula",
+                "--start", "2026-09-17T07:30:00-03:00",
+                "--end", "2026-09-17T09:20:00-03:00",
+            )["created"]
+            self.cli(
+                h, "slot", "add",
+                "--text", "Estudo faculdade",
+                "--start", "2026-09-17T09:20:00-03:00",
+                "--end", "2026-09-17T11:10:00-03:00",
+            )
+            self.cli(
+                h, "slot", "add",
+                "--text", "Aula",
+                "--start", "2026-09-17T11:10:00-03:00",
+                "--end", "2026-09-17T13:00:00-03:00",
+            )
+            fisio = self.cli(
+                h, "slot", "add",
+                "--text", "Fisioterapia",
+                "--start", "2026-09-17T15:00:00-03:00",
+                "--end", "2026-09-17T16:20:00-03:00",
+            )["created"]
+            again = self.cli(
+                h, "slot", "add",
+                "--text", "Aula",
+                "--start", "2026-09-17T07:30:00-03:00",
+                "--end", "2026-09-17T09:20:00-03:00",
+            )
+            listed = self.cli(h, "slot", "list")["slots"]
+            self.assertEqual(len(listed), 4)
+            self.assertEqual(aula["text"], "Aula")
+            self.assertEqual(fisio["text"], "Fisioterapia")
+            self.assertEqual(again["skipped"], "duplicate")
+
+    def test_learn_reading_and_hobby_and_edition_separates_them(self):
+        with tempfile.TemporaryDirectory() as h:
+            self.cli(h, "learn", "add", "--sphere", "reading", "--text", "lista de livros")
+            self.cli(h, "learn", "add", "--sphere", "hobby", "--text", "piano")
+            known = self.cli(h, "learn", "show")["known"]
+            self.assertEqual(known["reading"][0]["text"], "lista de livros")
+            self.assertEqual(known["hobby"][0]["text"], "piano")
+            import importlib.util
+            spec = importlib.util.spec_from_file_location(
+                "edition", ROOT / "scripts" / "edition.py"
+            )
+            edition = importlib.util.module_from_spec(spec)
+            spec.loader.exec_module(edition)
+            md = edition.compose(
+                {"language": "pt", "goals": {}, "tasks": [], "profile": {}},
+                datetime.now(timezone.utc),
+                extra={
+                    "fires": [
+                        {
+                            "text": "Lembrete de pagamento — fatura de luz",
+                            "sphere": "life",
+                        }
+                    ],
+                    "readings": ["lista de livros"],
+                    "hobbies": ["piano"],
+                },
+            )
+            self.assertIn("Leituras", md)
+            self.assertIn("lista de livros", md)
+            self.assertIn("Hobbies", md)
+            self.assertIn("piano", md)
+            self.assertIn("Vida: Lembrete de pagamento", md)
+
+    def test_focus_orders_by_importance_not_insertion(self):
+        with tempfile.TemporaryDirectory() as h:
+            self.cli(
+                h, "add", "--text", "arrumar gaveta", "--category", "life",
+                "--important", "no", "--urgent", "no",
+            )
+            self.cli(
+                h, "add", "--text", "escrever newsletter", "--category", "work",
+                "--important", "yes", "--urgent", "no", "--reason", "meta da semana",
+            )
+            self.cli(
+                h, "add", "--text", "entregar relatório", "--category", "work",
+                "--important", "yes", "--urgent", "yes", "--reason", "prazo hoje",
+            )
+            self.cli(h, "language", "set", "pt")
+            out = self.cli(h, "edition", "--no-send")
+            md = Path(out["markdown"]).read_text(encoding="utf-8")
+            self.assertIn("Seu Report Diário", out["title"])
+            section = md.split("## O que importa hoje")[1]
+            q1 = section.index("entregar relatório")
+            q2 = section.index("escrever newsletter")
+            q4 = section.index("arrumar gaveta")
+            self.assertLess(q1, q2)
+            self.assertLess(q2, q4)
+            self.assertIn("prazo hoje", section)
+
+    def test_extra_file_injects_research_and_title(self):
+        with tempfile.TemporaryDirectory() as h:
+            extra = Path(h) / "extra.json"
+            extra.write_text(json.dumps({
+                "title": "Seu Report Diário — 17/09",
+                "clips": ["IA na educação: resumo curto de uma frase."],
+            }), encoding="utf-8")
+            out = self.cli(h, "edition", "--no-send", "--extra-file", str(extra))
+            md = Path(out["markdown"]).read_text(encoding="utf-8")
+            self.assertEqual(out["title"], "Seu Report Diário — 17/09")
+            self.assertIn("IA na educação", md)
+
+    def test_profile_name_survives(self):
+        with tempfile.TemporaryDirectory() as h:
+            p = self.cli(h, "profile", "set", "--name", "Mel")["profile"]
+            self.assertEqual(p["name"], "Mel")
+
+
+class DateParseTests(unittest.TestCase):
+    def test_named_and_iso(self):
+        import importlib.util
+        spec = importlib.util.spec_from_file_location("dates", DATES)
+        mod = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(mod)
+        now = datetime(2026, 9, 17, tzinfo=timezone.utc)
+        found = mod.parse_html(
+            "<p>Ends September 23, 2026 and also 2026-10-01</p>", now=now
+        )
+        self.assertEqual(found[0]["date"], "2026-09-23")
+        self.assertEqual(found[-1]["date"], "2026-10-01")
+        self.assertEqual(mod.latest(found)["date"], "2026-10-01")
+
+
+if __name__ == "__main__":
+    unittest.main()

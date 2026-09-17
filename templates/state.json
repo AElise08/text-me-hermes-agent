@@ -1,5 +1,24 @@
 {
   "goals": {"work": "", "life": ""},
   "tasks": [],
-  "language": ""
+  "language": "",
+  "profile": {
+    "setup_done": false,
+    "name": "",
+    "routine": "",
+    "interests": [],
+    "avoid": [],
+    "delivery": "",
+    "kindle_email": "",
+    "printer_email": "",
+    "printer_uri": "",
+    "work_about": [],
+    "life_about": [],
+    "edition_hour": 7
+  },
+  "known": {"work": [], "life": [], "reading": [], "hobby": []},
+  "durations": {},
+  "blocks": [],
+  "commitments": [],
+  "slots": []
 }

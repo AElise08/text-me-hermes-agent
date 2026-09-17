@@ -1,44 +1,54 @@
-# Calendar (optional)
+# Calendar and Gmail
 
-text-me can ground its priorities in the owner's real calendar instead of
-guessing deadlines. The access comes from Plow's Google connector, which covers
-**Gmail and Google Calendar** together.
+text-me never asks for a Google password. Connect Google once at
+<https://app.plow.co> → Connectors. That OAuth covers **Gmail and Calendar**.
 
-## Connecting (owner-side, once)
+## Default: REST, no Latch, no Mac
 
-- The owner connects their Google account in Plow: <https://app.plow.co> →
-  Connectors → Google / Gmail. There is also a connect-code flow
-  (`POST /v1/connectors/gmail/connect-code`, then the owner enters the code at
-  the Plow web app).
-- You never connect it for the owner and never ask for a Google password, OAuth
-  token or API key. You offer the step; the owner takes it.
-- The tools reach you through the Plow relay, which needs the owner's machine
-  online (the Plow app / relay on their Mac). If the relay is down, the tools
-  are simply absent — say so and fall back to asking for deadlines in text.
-- Until a connector is connected, Plow reports “No connectors are currently
-  connected.” and no calendar tool exists. That is normal, not an error.
+`plow-agents login` stores an **account** token in `~/.config/plow/token`.
+Mount that file into the container (see compose.override.example.yml). The
+agent token from `mint` cannot call connectors (403). The account token can:
+list calendars, list today's events, create/update blocks, list inbox, mint a
+short-lived Google token, and **send mail** (EPUB → Kindle, PDF → printer).
 
-## What becomes available (through the Plow toolset)
+```sh
+python3 /var/lib/hermes/scripts/connectors.py
+python3 /var/lib/hermes/scripts/gcal.py status
+python3 /var/lib/hermes/scripts/gcal.py today
+python3 /var/lib/hermes/scripts/gcal.py on --date 2026-09-17
+python3 /var/lib/hermes/scripts/gcal.py create --summary "focus" --start "..." --end "..."
+python3 /var/lib/hermes/scripts/gmail.py list
+python3 /var/lib/hermes/scripts/gmail.py get MESSAGE_ID
+python3 /var/lib/hermes/scripts/gmail.py send --to you@example.com --subject "hi" --body "..."
+python3 /var/lib/hermes/scripts/gmail.py kindle --to you@kindle.com --epub /path/day.epub
+python3 /var/lib/hermes/scripts/printer.py probe
+```
 
-Discover the exact tool names from your own tool list at run time; the
-underlying operations are:
+Clock times they already have (aula, fisioterapia, a named free window) go
+on the calendar with `matriz.py slot add` — **every** interval in that turn.
+"ok / coloca no calendário" after a full day dump books the **whole grid**,
+not one focus line. `block start` is for a focus block you proposed.
 
-- `calendar.list` — the owner's calendars.
-- `calendar.events.list` — events in a window (`time_min`, `time_max`,
-  `query`, `max_results`).
-- `calendar.freebusy` — busy blocks in a window.
-- `calendar.events.create` — events with `summary`, `start`, `end`,
-  `description`, `location`, `attendees`, `time_zone`, `calendar_id`,
-  `add_meet`.
-- `calendar.events.update` / `calendar.events.delete`.
+After they say ok / tá bom / sim to a **proposed** focus block, `matriz.py
+block start` creates that Google event on this path.
+
+`matriz.py edition` writes EPUB + PDF. Kindle gets the EPUB. Printer and
+email get the PDF. Mail it when an address is set (`--kindle-email`,
+`--printer-email`, or `KINDLE_EMAIL` / `PRINTER_EMAIL`). The connected Gmail
+must already be an approved sender (Amazon Send-to-Kindle, or the printer's
+ePrint/Epson/Brother allowlist). IPP (`PRINTER_URI`) is the extra path when
+this machine can see the printer on the LAN.
+
+## Optional: Plow Latch
+
+If the owner has Plow on a computer, Latch adds Mac-local tools. It is not
+required for Calendar or Gmail.
 
 ## How to use it in a turn
 
-- Read before you write. Pull the next day or two (`calendar.events.list`) so
-  "today"/"tomorrow" is real. Never invent an event, deadline or attendee.
-- Create, update or delete only with the owner's explicit consent in the same
-  conversation, and state what you changed (title + when) right after.
-- Protect Q2: when the owner agrees, offer to block focused time for the
-  weekly goal instead of only naming it.
-- When the tools are absent (not connected, or the relay is offline), say it
-  plainly, offer to connect, and keep working from deadlines the owner types.
+- Read today with `gcal.py today` before proposing a slot.
+- "ok" creates the block. Do not ask twice.
+- Read mail with `gmail.py list` / `gmail.py get ID`.
+- Emailing a third person still needs a yes in that turn.
+- Mailing **their** Kindle / printer / email edition does not need a second yes.
+- If REST status is not connected, tell them to finish Google at app.plow.co.
