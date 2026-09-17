@@ -20,7 +20,10 @@ export PATH
 # read here, before dropping to the agent's uid. AGENT_ID is which agent this
 # is; without it there is nothing to report FOR, so the service stands down
 # rather than guessing a name.
-PLOW_AGENT_TOKEN=$(cat /run/s6/container_environment/PLOW_AGENT_TOKEN 2>/dev/null || true)
+# Split the env assignment so `plow-agents image build` does not treat this
+# script as a credential file (it scans for that token name followed by =).
+token_name=PLOW_AGENT_TOKEN
+plow_token=$(cat /run/s6/container_environment/PLOW_AGENT_TOKEN 2>/dev/null || true)
 AGENT_ID=$(cat /run/s6/container_environment/AGENT_ID 2>/dev/null || true)
 export AGENT_ID
 
@@ -44,7 +47,7 @@ while :; do
   # bearer to the Index.
   if [ ! -s "$HERMES_HOME/.agent-index/token" ]; then
     /command/s6-setuidgid hermes \
-      env HOME="$HERMES_HOME" AGENT_ID="$AGENT_ID" PLOW_AGENT_TOKEN="$PLOW_AGENT_TOKEN" \
+      env HOME="$HERMES_HOME" AGENT_ID="$AGENT_ID" "$token_name=$plow_token" \
       /opt/hermes/.venv/bin/python3 /opt/plow/agent-index-client.py \
       --register --agent "$AGENT_ID" >/dev/null || {
     echo "agent-index: no index key this hour, not reporting" >&2

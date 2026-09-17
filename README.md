@@ -50,13 +50,15 @@ job template.
 - **After this, then that.** "After the launch" + the link: it reads a date
   the page actually contains. "When the previous one closes" waits. It answers
   in whatever language you (or the other person) wrote.
-- **"Seu Reporte Diário" / "Your Daily Report" on Kindle.** Title is that name
-  plus **today in your timezone**, so it does not vanish in the Kindle library.
-  Every morning it researches your interests itself (short clips, optional
-  editorial cartoon if you asked) and puts on the page: what needs you (a bill
-  even from noreply), calendar changes already applied, a yes waiting in email,
-  the one thing not to drop — then readings and hobbies, apart. "What matters
-  today" is ordered by **importance**, never by clock.
+- **A morning newspaper.** Masthead is **The Text-me**. The page is
+  **Seu Reporte Diário** / **Your Daily Report** plus **today in your
+  timezone**, so it does not vanish in a Kindle library. Every morning it
+  researches your interests itself (short clips, optional editorial cartoon if
+  you asked) and puts on the page: what needs you (a bill even from noreply),
+  calendar changes already applied, a yes waiting in email, the one thing not
+  to drop — then readings and hobbies, apart. "What matters today" is ordered
+  by **importance**, never by clock. It can land on Kindle, a printer, email,
+  or just the thread.
 - **It learns who you are.** Say "follow-up of an investor" once and it saves
   that as work; a book list becomes readings; piano becomes a hobby. Another
   person names a clinic, a night shift, a choir — same mechanism, their
@@ -86,6 +88,35 @@ If you have no assistant line yet: `plow-agents login --new-line`, then `lines`
 and `mint`.
 
 `plow-credentials` and `.env` are gitignored. Do not commit them.
+
+### Cloud custom image
+
+Plow cloud agents now run a **public custom image** — the first step toward
+one-click deploy on the leaderboard. Follow the same flow as
+[plow-agents](https://github.com/plow-pbc/plow-agents): `plow-agents.toml`
+in this repo already names the image, so you can omit it on the CLI.
+
+```sh
+# classic GitHub PAT with write:packages — fine-grained PATs cannot push GHCR
+docker login ghcr.io -u YOUR_GITHUB_USERNAME
+
+plow-agents image build          # linux/amd64, tag from plow-agents.toml
+plow-agents image push           # prints ghcr.io/…/text-me-hermes-agent@sha256:…
+```
+
+After the first push, make the GHCR package **public** (GitHub → Packages);
+otherwise Plow’s anonymous pull fails. Copy the `repository@sha256:…` line,
+then request it on a **free** line:
+
+```sh
+plow-agents deploy ghcr.io/aelise08/text-me-hermes-agent@sha256:… --line ln_xxx
+plow-agents agents               # wait until STATUS is running, then text the number
+```
+
+`deploy` without `--local` occupies the line on Plow’s cloud — stop Compose
+on that line first. Credentials stay out of the image (`.dockerignore`
+already drops `plow-credentials` and `.env`). You can also deploy a listing
+with `plow-agents deploy exe:hermes`.
 
 ## How to use it
 
