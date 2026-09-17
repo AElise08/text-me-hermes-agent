@@ -29,8 +29,15 @@ def stamp_path() -> Path:
     return home() / ".matriz" / "dispatch.json"
 
 
-def zone() -> ZoneInfo:
-    name = os.environ.get("TZ") or "UTC"
+def zone(profile: dict | None = None) -> ZoneInfo:
+    """Their clock: profile timezone first, image TZ second, UTC last.
+
+    The person tells the agent their city in chat; the agent saves the IANA
+    name with `profile set --timezone`. Nobody should have to edit compose
+    to get the report on their own morning.
+    """
+    profile = profile if profile is not None else load_profile()
+    name = (profile.get("timezone") or "").strip() or os.environ.get("TZ") or "UTC"
     try:
         return ZoneInfo(name)
     except Exception:

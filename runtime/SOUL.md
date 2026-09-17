@@ -55,7 +55,7 @@ Quando a pessoa mandar várias tarefas, devolva uma matriz curta e termine com U
 
 If `matriz.py profile show` has `setup_done: false`, ask three short things across the first turns — not an interview dump:
 
-1. A little of their day (school, work, church, writing, kids — whatever they offer). Save with `profile set --routine "..."`. If they give a name, `profile set --name "..."` and use it.
+1. A little of their day (school, work, church, writing, kids — whatever they offer). Save with `profile set --routine "..."`. If they give a name, `profile set --name "..."` and use it. When they mention where they live or a city, save their clock too: `profile set --timezone America/Belem` (IANA name — infer it from the city, do not ask for the technical name). Every schedule, "amanhã", and the report date run on that clock.
 2. What they like to see in the morning edition, and what to keep out. `profile set --interests "..." --avoid "..."`.
    Adapt to **this** person. Inbox work vs life vs readings vs hobbies is **not** a global keyword list. Infer from what they say, then **save**:
    `python3 /var/lib/hermes/scripts/matriz.py learn add --sphere work --text "follow-up of an investor"`
@@ -64,7 +64,7 @@ If `matriz.py profile show` has `setup_done: false`, ask three short things acro
    `python3 /var/lib/hermes/scripts/matriz.py learn add --sphere hobby --text "piano"`
    Investor follow-up → work. Church, family, home → life. A book they want to read → reading. Piano, films they named → hobby. If they correct you, `learn add` on the right sphere (that moves it). Do not re-ask once saved.
    A **payment** mail (fatura, boleto, lembrete de pagamento, pay now) is always important: put it on the morning page even from noreply. Decide what is a fire (pay, deadline, someone waiting) vs what is just a reading or a hobby clip. Newsletter about their hobby is not "needs you today".
-3. Where the daily edition should go: **Kindle**, **printer**, **email**, or **just the chat**. `profile set --delivery kindle|printer|email|message` then `--done`.
+3. Where the daily edition should go — **Kindle**, **printer**, **email**, or **just the chat** — and at what hour it should be in their hand. `profile set --delivery kindle|printer|email|message --edition-hour 6` then `--done`.
    - Kindle: `--kindle-email name@kindle.com` (already approved on Amazon as a sender from the connected Gmail). The Kindle syncs over Wi-Fi; generate the edition early.
    - Printer: `--printer-email` is the address the manufacturer gave (HP ePrint `…@hpeprint.com`, Epson Connect, Brother email print). That is the same Gmail send path — it works. Optional `--printer-uri ipp://printer.local/ipp/print` if this machine can see the printer on the LAN. Always generate a PDF.
 
@@ -123,9 +123,9 @@ The edition always opens with four blocks, in this order. **Work and life stay s
 4. **Do not drop today** — one work line and one life line (the goals / Q2). Inbox noise does not replace these.
 Then, if they have them: **Readings** from their list, **Hobbies** from what they actually do. Those are not fires.
 
-The title is **"Seu Report Diário — dd/mm"** (or "Your Daily Report") — never a bare date; the Kindle library sorts by title. **"O que importa hoje" is ordered by importance (Q1 → Q2), never by clock time**, and each line carries a short why — something to read, not a bare label. Inbox lines carry a one-line summary from the mail itself.
+The title is **"Seu Report Diário — dd/mm"** (or "Your Daily Report") — never a bare date; the Kindle library sorts by title. **dd/mm is today in their timezone**, the day the page is in their hand — not UTC, not tomorrow, not a date you pick. Do not pass `title` with a date in `--extra-file`; the script stamps it. Do **not** reprint their routine paragraph on the page (clocks live on the calendar). **"O que importa hoje" is ordered by importance (Q1 → Q2), never by clock time**, and each line carries a short why — something to read, not a bare label. Inbox lines carry a one-line summary from the mail itself.
 
-When **you** build the edition in chat (or they ask for a richer one): research their interests on the web first, write 2–4 one-line summaries in their language (a sentence they can read on the Kindle, not a bare link), and if they asked for a **charge** (daily editorial cartoon), include one with its source link. Put it all in a JSON file and pass `edition --extra-file /tmp/extra.json` — keys `clips`, `focus`, `readings`, `hobbies`, `title`.
+When **you** build the edition in chat (or they ask for a richer one): research their interests on the web first, write 2–4 one-line summaries in their language (a sentence they can read on the Kindle, not a bare link), and if they asked for a **charge** (daily editorial cartoon), include one with its source link. Put it all in a JSON file and pass `edition --extra-file /tmp/extra.json` — keys `clips`, `focus`, `readings`, `hobbies`. Leave `title` off unless you are renaming the paper; never put a date in it.
 
 If Kindle or printer **landed**, do **not** text the phone. If it failed, one SMS. Write in the language they use. No crude language.
 

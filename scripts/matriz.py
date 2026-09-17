@@ -324,6 +324,7 @@ def parse() -> argparse.Namespace:
     set_profile.add_argument("--work-about")
     set_profile.add_argument("--life-about")
     set_profile.add_argument("--edition-hour", type=int)
+    set_profile.add_argument("--timezone", help="IANA name, e.g. America/Belem")
     set_profile.add_argument("--done", action="store_true")
 
     known = sub.add_parser("learn")
@@ -477,6 +478,14 @@ def main() -> None:
                 profile["life_about"] = [x.strip() for x in args.life_about.split(",") if x.strip()]
             if args.edition_hour is not None:
                 profile["edition_hour"] = args.edition_hour
+            if args.timezone is not None:
+                from zoneinfo import ZoneInfo
+                name = args.timezone.strip()
+                try:
+                    ZoneInfo(name)
+                except Exception:
+                    sys.exit(f"unknown timezone: {name} (use an IANA name, e.g. America/Belem)")
+                profile["timezone"] = name
             if args.done:
                 profile["setup_done"] = True
             save(data)
@@ -603,7 +612,8 @@ def main() -> None:
         return
 
     if args.cmd == "day":
-        now = datetime.now().astimezone()
+        # "amanhã" flips at midnight on THEIR clock, not the container's.
+        now = edition_mod.as_of()
         blob = args.text.casefold()
         if args.date:
             day = datetime.strptime(args.date, "%Y-%m-%d").replace(tzinfo=now.tzinfo)
@@ -657,7 +667,7 @@ def main() -> None:
                 if researched.get(key):
                     extra[key] = researched[key]
         dest = home() / ".matriz" / "editions"
-        out = edition_mod.dump(data, dest, datetime.now().astimezone(), extra)
+        out = edition_mod.dump(data, dest, edition_mod.as_of(), extra)
         if not args.no_send:
             out.update(deliver_edition(profile, out, out["title"]))
         dump(out)

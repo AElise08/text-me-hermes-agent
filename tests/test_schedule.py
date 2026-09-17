@@ -26,6 +26,15 @@ class ScheduleTests(unittest.TestCase):
         self.assertFalse(schedule.wants_morning_chat(profile, sent=True))
         self.assertTrue(schedule.wants_morning_chat(profile, sent=False))
 
+    def test_zone_comes_from_their_profile_before_the_image_tz(self):
+        schedule = load()
+        with patch.object(schedule, "load_profile", return_value={"timezone": "Europe/Lisbon"}):
+            self.assertEqual(str(schedule.zone()), "Europe/Lisbon")
+        with patch.dict("os.environ", {"TZ": "America/Belem"}):
+            with patch.object(schedule, "load_profile", return_value={}):
+                self.assertEqual(str(schedule.zone()), "America/Belem")
+        self.assertEqual(str(schedule.zone({"timezone": "garbage/zone"})), "UTC")
+
     def test_already_sent_sleeps_until_tomorrow(self):
         schedule = load()
         tz = ZoneInfo("UTC")

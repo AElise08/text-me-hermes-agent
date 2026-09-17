@@ -53,7 +53,9 @@ and sends mail (EPUB → Kindle, PDF → printer email). Latch is not required.
 
 Kindle: `edition_hour` is **in their hand**. Mail 5 minutes earlier
 (6:00 → 5:55). If it landed, do not text the phone. Title is "Seu Report
-Diário — dd/mm", never a bare date. "O que importa hoje" is ordered by
+Diário — dd/mm", never a bare date; **dd/mm is today in their timezone**,
+never tomorrow and never a date in `--extra-file`. Do not reprint their
+routine on the page. "O que importa hoje" is ordered by
 importance (Q1 first), never by clock, each line with a short why. For a
 richer edition, research their interests and pass summaries (and the charge,
 if they asked) via `edition --extra-file`. The edition opens with

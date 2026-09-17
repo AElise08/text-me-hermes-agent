@@ -14,7 +14,8 @@
     "printer_uri": "",
     "work_about": [],
     "life_about": [],
-    "edition_hour": 7
+    "edition_hour": 7,
+    "timezone": ""
   },
   "known": {"work": [], "life": [], "reading": [], "hobby": []},
   "durations": {},

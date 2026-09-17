@@ -4,11 +4,15 @@ from __future__ import annotations
 
 import html
 import json
+import re
 import zipfile
 from datetime import datetime
 from pathlib import Path
 
 import pdf as pdf_mod
+import schedule as schedule_mod
+
+_DATE_SUFFIX = re.compile(r"\s*[—–-]\s*\d{1,2}/\d{1,2}\s*$")
 
 CONTAINER = """<?xml version="1.0" encoding="UTF-8"?>
 <container version="1.0" xmlns="urn:oasis:names:tc:opendocument:xmlns:container">
@@ -81,11 +85,39 @@ def write_epub(path: Path, title: str, markdown: str, day: str) -> None:
         zf.writestr("OEBPS/body.html", xhtml)
 
 
+def as_of(when: datetime | None = None) -> datetime:
+    """The edition's day is their clock, not UTC and not 'tomorrow'.
+
+    An aware `when` already is someone's local time — keep that date.
+    Naive/now fall back to their profile timezone, then the image TZ.
+    """
+    zone = schedule_mod.zone()
+    if when is None:
+        return datetime.now(zone)
+    if when.tzinfo is None:
+        return when.replace(tzinfo=zone)
+    return when
+
+
 def default_title(pt: bool, when: datetime) -> str:
     """A name the Kindle library can hold on to — not a bare date."""
+    when = as_of(when)
     if pt:
         return f"Seu Report Diário — {when.strftime('%d/%m')}"
     return f"Your Daily Report — {when.strftime('%b %d')}"
+
+
+def stamp_title(pt: bool, when: datetime, extra: dict | None = None) -> str:
+    """Keep a custom name; the dd/mm is always the local day of `when`."""
+    when = as_of(when)
+    custom = ((extra or {}).get("title") or "").strip()
+    if custom:
+        custom = _DATE_SUFFIX.sub("", custom).strip()
+        if custom:
+            if pt:
+                return f"{custom} — {when.strftime('%d/%m')}"
+            return f"{custom} — {when.strftime('%b %d')}"
+    return default_title(pt, when)
 
 
 QUADRANT_ORDER = {"Q1": 0, "Q2": 1, "Q3": 2, "Q4": 3}
@@ -159,10 +191,8 @@ def compose(state: dict, when: datetime, extra: dict | None = None) -> str:
     goals = state.get("goals") or {}
     active = [t for t in state.get("tasks") or [] if not t.get("done")]
     open_blocks = [b for b in state.get("blocks") or [] if b.get("status") != "done"]
-    title = extra.get("title") or default_title(pt, when)
+    title = stamp_title(pt, when, extra)
     lines = [f"# {title}", ""]
-    if profile.get("routine"):
-        lines += [("Rotina" if pt else "Routine") + ": " + profile["routine"], ""]
     fires = extra.get("fires") or extra.get("needs") or []
     split = _by_sphere(fires)
     lines.append("## " + ("O que precisa de ti hoje" if pt else "What needs you today"))
@@ -279,6 +309,7 @@ def compose(state: dict, when: datetime, extra: dict | None = None) -> str:
 
 def dump(state: dict, dest_dir: Path, when: datetime, extra: dict | None = None) -> dict:
     extra = extra or {}
+    when = as_of(when)
     day = when.date().isoformat()
     markdown = compose(state, when, extra)
     dest_dir.mkdir(parents=True, exist_ok=True)
@@ -287,7 +318,7 @@ def dump(state: dict, dest_dir: Path, when: datetime, extra: dict | None = None)
     pdf_path = dest_dir / f"{day}.pdf"
     md_path.write_text(markdown, encoding="utf-8")
     pt = (state.get("language") or "").lower().startswith("pt")
-    title = extra.get("title") or default_title(pt, when)
+    title = stamp_title(pt, when, extra)
     write_epub(epub_path, title, markdown, day)
     pdf_mod.write_pdf(pdf_path, markdown)
     return {

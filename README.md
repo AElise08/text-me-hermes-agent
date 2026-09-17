@@ -102,7 +102,7 @@ on that line.
 2. **Dump, then start.** Send the list. It proposes an order and one next
    step. Correct it in the thread ("that's life, not work", "no deadline")
    — it will reclassify instead of guessing.
-3. **Daily edition** at the hour they chose (`profile set --edition-hour 6` means **in their hand** at 06:00). Kindle is mailed at 05:55. Set timezone with `TZ` in `compose.override.yml` (IANA name, e.g. `America/Belem`). Until you set one, it uses `America/Belem`.
+3. **Daily edition** at the hour they chose (`profile set --edition-hour 6` means **in their hand** at 06:00). Kindle is mailed at 05:55. The clock is **theirs**: tell the agent your city in chat and it saves your timezone in your profile (`profile set --timezone America/Belem`). `TZ` in `compose.override.yml` is only the fallback; without either, UTC.
 
 ```sh
 cp compose.override.example.yml compose.override.yml
@@ -132,7 +132,10 @@ A dumped day with clock times is `matriz.py day --text "..."` — paste the
 not already put on a clock.
 
 The daily edition is EPUB (Kindle) and PDF (printer). Title is **Seu Report
-Diário** / **Your Daily Report**, not a bare date. If you chose Kindle, set
+Diário** / **Your Daily Report**, not a bare date — and the dd/mm is stamped
+by the script as **today in your timezone**, so the page and its date always
+match the morning it lands. Your routine paragraph stays off the page:
+clocks live on the calendar. If you chose Kindle, set
 your Send-to-Kindle address in chat. If you chose printer, set the printer's
 own email (HP ePrint, Epson Connect, Brother) — same Gmail send — or an IPP
 URI when this computer can see the printer. Commercial ebooks: store link

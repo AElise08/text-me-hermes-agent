@@ -109,6 +109,8 @@ class MatrixTests(unittest.TestCase):
             self.assertIn("Do not drop today", md)
             self.assertIn("Work: Ship the Kindle edition", md)
             self.assertIn("A yes waiting in email", md)
+            self.assertNotIn("bus to campus", md)
+            self.assertNotIn("Routine:", md)
             epub = Path(out["epub"])
             pdf = Path(out["pdf"])
             self.assertEqual(out["delivery"], "kindle")
@@ -231,6 +233,10 @@ class MatrixTests(unittest.TestCase):
             self.assertEqual(known["reading"][0]["text"], "lista de livros")
             self.assertEqual(known["hobby"][0]["text"], "piano")
             import importlib.util
+            import sys
+            scripts = str(ROOT / "scripts")
+            if scripts not in sys.path:
+                sys.path.insert(0, scripts)
             spec = importlib.util.spec_from_file_location(
                 "edition", ROOT / "scripts" / "edition.py"
             )
@@ -291,8 +297,30 @@ class MatrixTests(unittest.TestCase):
             }), encoding="utf-8")
             out = self.cli(h, "edition", "--no-send", "--extra-file", str(extra))
             md = Path(out["markdown"]).read_text(encoding="utf-8")
-            self.assertEqual(out["title"], "Seu Report Diário — 17/09")
+            self.assertTrue(out["title"].startswith("Seu Report Diário"))
             self.assertIn("IA na educação", md)
+
+    def test_title_date_is_the_local_day_not_the_extra_file(self):
+        import importlib.util
+        import sys
+        from zoneinfo import ZoneInfo
+
+        scripts = str(ROOT / "scripts")
+        if scripts not in sys.path:
+            sys.path.insert(0, scripts)
+        spec = importlib.util.spec_from_file_location("edition", ROOT / "scripts" / "edition.py")
+        edition = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(edition)
+        when = datetime(2026, 9, 16, 23, 54, tzinfo=ZoneInfo("America/Sao_Paulo"))
+        title = edition.stamp_title(True, when, {"title": "Seu Report Diário — 17/09"})
+        self.assertEqual(title, "Seu Report Diário — 16/09")
+        md = edition.compose(
+            {"language": "pt", "profile": {"routine": "aula 7h30, fisio 15h"}},
+            when,
+        )
+        self.assertIn("16/09", md)
+        self.assertNotIn("Rotina", md)
+        self.assertNotIn("7h30", md)
 
     def test_profile_name_survives(self):
         with tempfile.TemporaryDirectory() as h:

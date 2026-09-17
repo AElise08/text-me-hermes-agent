@@ -71,7 +71,17 @@ def call(action: str, body: dict | None = None, method: str | None = None) -> di
 
 
 def zone() -> ZoneInfo:
-    name = env("TZ") or "UTC"
+    """Their clock, same rule as schedule.py: profile timezone, then TZ."""
+    name = ""
+    try:
+        state = json.loads(
+            (Path(os.environ.get("HERMES_HOME", "/var/lib/hermes")) / ".matriz" / "state.json")
+            .read_text(encoding="utf-8")
+        )
+        name = ((state.get("profile") or {}).get("timezone") or "").strip()
+    except (OSError, json.JSONDecodeError):
+        pass
+    name = name or env("TZ") or "UTC"
     try:
         return ZoneInfo(name)
     except Exception:
