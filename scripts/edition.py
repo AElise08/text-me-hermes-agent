@@ -205,43 +205,31 @@ def compose(state: dict, when: datetime, extra: dict | None = None) -> str:
     for text in split.get("", []):
         fire_lines.append(text)
     exceptions = extra.get("exceptions") or []
-    lines.append("## " + ("Agenda que mudou" if pt else "Calendar that moved"))
     if exceptions:
+        lines.append("## " + ("Agenda que mudou" if pt else "Calendar that moved"))
         for item in exceptions:
             lines.append(f"- {item}")
-    else:
-        lines.append("- " + ("Nenhuma mudança na agenda." if pt else "No calendar changes."))
-    lines.append("")
+        lines.append("")
     approvals = extra.get("approvals") or []
-    lines.append("## " + ("Sim que chegou no e-mail" if pt else "A yes waiting in email"))
     split_yes = _by_sphere(approvals)
     if split_yes["work"] or split_yes["life"] or split_yes.get(""):
+        lines.append("## " + ("Sim que chegou no e-mail" if pt else "A yes waiting in email"))
         for text in split_yes["work"]:
             lines.append(f"- {work_l}: {text}")
         for text in split_yes["life"]:
             lines.append(f"- {life_l}: {text}")
         for text in split_yes.get("", []):
             lines.append(f"- {text}")
-    else:
-        lines.append("- " + ("Ninguém esperando um sim na caixa." if pt else "Nobody waiting on a yes in the inbox."))
-    lines.append("")
+        lines.append("")
     hold_work = hold_line(state, extra, "work")
     hold_life = hold_line(state, extra, "life")
-    lines.append("## " + ("Não larga hoje" if pt else "Do not drop today"))
-    if hold_work:
-        lines.append(f"- {work_l}: {hold_work}")
-    if hold_life:
-        lines.append(f"- {life_l}: {hold_life}")
-    if not hold_work and not hold_life:
-        lines.append(
-            "- "
-            + (
-                "Ainda não tem. Diz a meta de trabalho e a de vida."
-                if pt
-                else "None yet. Set a work goal and a life goal."
-            )
-        )
-    lines.append("")
+    if hold_work or hold_life:
+        lines.append("## " + ("Não larga hoje" if pt else "Do not drop today"))
+        if hold_work:
+            lines.append(f"- {work_l}: {hold_work}")
+        if hold_life:
+            lines.append(f"- {life_l}: {hold_life}")
+        lines.append("")
     readings = extra.get("readings") or []
     hobbies = extra.get("hobbies") or []
     if readings:
@@ -255,14 +243,11 @@ def compose(state: dict, when: datetime, extra: dict | None = None) -> str:
             lines.append(f"- {item}")
         lines.append("")
     meetings = extra.get("meetings") or []
-    lines.append("## " + ("Hoje na agenda" if pt else "On the calendar"))
     if meetings:
+        lines.append("## " + ("Hoje na agenda" if pt else "On the calendar"))
         for item in meetings:
             lines.append(f"- {item}")
-    else:
-        lines.append("- " + ("Nada lido da agenda ainda — manda os horários no chat se o Google não estiver ligado." if pt else "No calendar read yet — text the times if Google is not connected."))
-    lines.append("")
-    lines.append("## " + ("O que importa hoje" if pt else "What matters today"))
+        lines.append("")
     focus = extra.get("focus") or []
     if not focus:
         focus = focus_lines(active, pt)
@@ -272,9 +257,11 @@ def compose(state: dict, when: datetime, extra: dict | None = None) -> str:
         if goals.get("life"):
             focus.append(("Vida: " if pt else "Life: ") + goals["life"])
     ranked = fire_lines + [x for x in (focus or []) if x and x != "—"]
-    for item in ranked or ["—"]:
-        lines.append(f"- {item}")
-    lines.append("")
+    if ranked:
+        lines.append("## " + ("O que importa hoje" if pt else "What matters today"))
+        for item in ranked:
+            lines.append(f"- {item}")
+        lines.append("")
     if open_blocks:
         lines.append("## " + ("Blocos em andamento" if pt else "Open blocks"))
         for block in open_blocks:

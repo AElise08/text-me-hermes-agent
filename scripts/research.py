@@ -123,14 +123,16 @@ def items(payload: bytes) -> list[tuple[str, str, str, datetime | None]]:
 def _fresh(
     rows: list[tuple[str, str, str, datetime | None]],
     now: datetime | None = None,
+    max_age: timedelta | None = None,
 ) -> list[tuple[str, str, str]]:
-    """Keep only items dated in the last MAX_AGE. Undated rows are old, skip them."""
+    """Keep only items dated within max_age. Undated rows are old, skip them."""
     now = now or datetime.now(timezone.utc)
+    window = max_age if max_age is not None else MAX_AGE
     kept: list[tuple[str, str, str]] = []
     for title, link, source, published in rows:
         if published is None:
             continue
-        if now - published > MAX_AGE:
+        if now - published > window:
             continue
         kept.append((title, link, source))
     return kept
@@ -183,7 +185,7 @@ def charge(language: str = "", now: datetime | None = None) -> list[str]:
     hl, gl, ceid = locale(language)
     url = NEWS.format(q=urllib.parse.quote(query), hl=hl, gl=gl, ceid=ceid)
     try:
-        rows = _fresh(items(fetch(url)), now=now)
+        rows = _fresh(items(fetch(url)), now=now, max_age=timedelta(hours=48))
     except (urllib.error.URLError, TimeoutError, OSError, ValueError):
         return []
     if not rows:

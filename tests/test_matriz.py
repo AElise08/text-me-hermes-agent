@@ -110,7 +110,7 @@ class MatrixTests(unittest.TestCase):
             self.assertNotIn("Nothing in the inbox matches", md)
             self.assertIn("Do not drop today", md)
             self.assertIn("Work: Ship the Kindle edition", md)
-            self.assertIn("A yes waiting in email", md)
+            self.assertNotIn("A yes waiting in email", md)
             self.assertNotIn("bus to campus", md)
             self.assertNotIn("Routine:", md)
             epub = Path(out["epub"])
