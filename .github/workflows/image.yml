@@ -1,0 +1,37 @@
+name: image
+
+on:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+  packages: write
+
+jobs:
+  ghcr:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - name: Build linux/amd64 image
+        run: docker build --platform linux/amd64 --tag ghcr.io/aelise08/text-me-hermes-agent:v1 .
+      - name: Push
+        run: docker push ghcr.io/aelise08/text-me-hermes-agent:v1
+      - name: Digest and public package
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          digest=$(docker inspect --format='{{index .RepoDigests 0}}' ghcr.io/aelise08/text-me-hermes-agent:v1)
+          echo "pushed $digest"
+          echo "$digest" >> "$GITHUB_STEP_SUMMARY"
+          for i in 1 2 3 4 5; do
+            gh api --method PATCH -H "Accept: application/vnd.github+json" \
+              /user/packages/container/text-me-hermes-agent \
+              -f visibility=public && break
+            sleep 5
+          done
