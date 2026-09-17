@@ -192,6 +192,37 @@ class MatrixTests(unittest.TestCase):
             self.assertEqual(fisio["text"], "Fisioterapia")
             self.assertEqual(again["skipped"], "duplicate")
 
+    def test_day_dump_books_every_clock_not_only_study(self):
+        import importlib.util
+        spec = importlib.util.spec_from_file_location("day", ROOT / "scripts" / "day.py")
+        day = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(day)
+        when = datetime(2026, 9, 17, tzinfo=timezone.utc).astimezone()
+        text = (
+            "Oi, então eu tenho faculdade amanhã às 7h30. Aí eu vou ter horário "
+            "livre entre 9h20 às 11h10 na faculdade. Então eu não consigo fazer "
+            "muita coisa. Eu tenho aula das 11h10 até 1h da tarde. E fora isso "
+            "eu também tenho fisioterapia 3 horas da tarde, então provavelmente "
+            "eu vou ter que almoçar na faculdade. E vai até umas 4h20."
+        )
+        slots = day.parse(text, when.replace(hour=0, minute=0, second=0, microsecond=0))
+        self.assertGreaterEqual(len(slots), 3)
+        blob = " ".join(s["text"].casefold() for s in slots)
+        self.assertRegex(blob, r"aula|faculdade")
+        self.assertRegex(blob, r"fisio|livre|estudo|aula")
+        starts = [s["start"][11:16] for s in slots]
+        self.assertTrue(any(t <= "08:00" for t in starts), starts)
+        self.assertTrue(any(t >= "14:00" for t in starts), starts)
+        en = (
+            "I have class tomorrow at 7:30. Free between 9:20 and 11:10. "
+            "Class from 11:10 to 1pm. Gym at 3pm until 4:20."
+        )
+        en_slots = day.parse(en, when.replace(hour=0, minute=0, second=0, microsecond=0))
+        self.assertGreaterEqual(len(en_slots), 3)
+        with tempfile.TemporaryDirectory() as h:
+            out = self.cli(h, "day", "--date", "2026-09-17", "--text", text)
+            self.assertGreaterEqual(len(out["created"]), 3)
+
     def test_learn_reading_and_hobby_and_edition_separates_them(self):
         with tempfile.TemporaryDirectory() as h:
             self.cli(h, "learn", "add", "--sphere", "reading", "--text", "lista de livros")

@@ -4,6 +4,7 @@ from __future__ import annotations
 import argparse
 import json
 import os
+import re
 import sys
 import uuid
 from datetime import datetime, timedelta
@@ -14,6 +15,7 @@ if str(HERE) not in sys.path:
     sys.path.insert(0, str(HERE))
 
 import dates as dates_mod  # noqa: E402
+import day as day_mod  # noqa: E402
 import duration as duration_mod  # noqa: E402
 import edition as edition_mod  # noqa: E402
 import gcal as gcal_mod  # noqa: E402
@@ -376,6 +378,10 @@ def parse() -> argparse.Namespace:
     add_s.add_argument("--kind", default="commitment")
     slot_sub.add_parser("list")
 
+    day_p = sub.add_parser("day")
+    day_p.add_argument("--text", required=True, help="The person's dump of the day, with clock times")
+    day_p.add_argument("--date", default="", help="YYYY-MM-DD, default tomorrow if they said amanhã")
+
     edition = sub.add_parser("edition")
     edition.add_argument("--title", default="")
     edition.add_argument("--no-send", action="store_true")
@@ -594,6 +600,27 @@ def main() -> None:
         out = add_slot(data, args.text, args.start, args.end, args.kind)
         save(data)
         dump(out)
+        return
+
+    if args.cmd == "day":
+        now = datetime.now().astimezone()
+        blob = args.text.casefold()
+        if args.date:
+            day = datetime.strptime(args.date, "%Y-%m-%d").replace(tzinfo=now.tzinfo)
+        elif re.search(r"\bamanh[ãa]\b", blob):
+            day = (now + timedelta(days=1)).replace(hour=0, minute=0, second=0, microsecond=0)
+        else:
+            day = now.replace(hour=0, minute=0, second=0, microsecond=0)
+        planned = day_mod.parse(args.text, day)
+        created, skipped = [], []
+        for item in planned:
+            row = add_slot(data, item["text"], item["start"], item["end"])
+            if row.get("created"):
+                created.append(row["created"])
+            else:
+                skipped.append(row)
+        save(data)
+        dump({"date": day.date().isoformat(), "planned": planned, "created": created, "skipped": skipped})
         return
 
     if args.cmd == "edition":

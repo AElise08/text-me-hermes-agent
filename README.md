@@ -31,27 +31,32 @@ If a fact would change the order, it asks; otherwise it proposes.
 
 ## Use cases
 
+Each install learns **that** person — work vs life, readings, hobbies, and
+what a dumped day looks like for them. Nothing here is a fixed school or
+job template.
+
 - **Dump the list.** Text everything on your plate. text-me classifies life vs
   work, Q1–Q4, and ends with **one** start.
-- **Dump the day, get the whole grid.** "Class 7:30, free 9:20–11:10, physio
-  at 3" — every interval you named lands on Google Calendar in that turn, not
-  just the one block it proposed.
+- **Dump the day, get the whole grid.** Class, a shift, clinic, gym, kids'
+  pickup — every clock you named lands on Google Calendar in that turn, not
+  just the one free window. One command reads the whole message.
 - **A time block that learns.** "I need 45 minutes to edit a video." If you
   say ok, it books the calendar. If you then say "20 more," that extension is
   the real duration — next time it reserves what the work actually took, not
   the guess.
-- **After this, then that.** "After the hackathon" + the link: it reads a date
+- **After this, then that.** "After the launch" + the link: it reads a date
   the page actually contains. "When the previous one closes" waits. It answers
   in whatever language you (or the other person) wrote.
-- **"Seu Report Diário" on your Kindle.** Every morning: what needs you
-  (a bill to pay is a reminder even from a noreply), calendar changes already
-  applied, a yes waiting in email, the one thing not to drop — then your
-  readings and hobbies, apart. "What matters today" is ordered by importance,
-  never by clock, each line with a short why. Kindle, printer, email, or chat.
+- **"Seu Report Diário" / "Your Daily Report" on Kindle.** Title is that name
+  plus the date, so it does not vanish in the Kindle library. Every morning:
+  what needs you (a bill to pay is a reminder even from a noreply), calendar
+  changes already applied, a yes waiting in email, the one thing not to drop
+  — then your readings and hobbies, apart. "What matters today" is ordered by
+  **importance**, never by clock, each line with a short why.
 - **It learns who you are.** Say "follow-up of an investor" once and it saves
-  that as work; a book list becomes readings; piano becomes a hobby. Correct
-  it once and the item moves. No keyword lists to configure — Gmail and
-  Calendar work over Plow's connectors, no Mac required.
+  that as work; a book list becomes readings; piano becomes a hobby. Another
+  person names a clinic, a night shift, a choir — same mechanism, their
+  words. Correct it once and the item moves.
 - **SMS and iPhone both work.** Text the line from any phone that can SMS.
 
 ## Install
@@ -117,19 +122,26 @@ on this install; `down -v` wipes them.
 ## Calendar, Gmail, Kindle
 
 Connect Google at <https://app.plow.co> → Connectors. Calendar **and Gmail**
-work **without Latch and without a Mac**: mount `~/.config/plow/token` (from
-`plow-agents login`) into the container. `connectors.py` / `gcal.py status`
-should show `connected: true`.
+work over REST: mount `~/.config/plow/token` (from `plow-agents login`) into
+the container. Latch is optional. `connectors.py` / `gcal.py status` should
+show `connected: true`.
 
-The daily edition is EPUB (Kindle) and PDF (printer). If you chose Kindle,
-set your Send-to-Kindle address in chat. If you chose printer, set the
-printer's own email (HP ePrint, Epson Connect, Brother) — same Gmail send,
-already working — or an IPP URI when this computer can see the printer.
-Commercial ebooks: store link only.
+A dumped day with clock times is `matriz.py day --text "..."` — paste the
+**whole** message. It creates every interval (not one focus block). A later
+"ok" after a proposed extra block (`block start`) is only for time you did
+not already put on a clock.
+
+The daily edition is EPUB (Kindle) and PDF (printer). Title is **Seu Report
+Diário** / **Your Daily Report**, not a bare date. If you chose Kindle, set
+your Send-to-Kindle address in chat. If you chose printer, set the printer's
+own email (HP ePrint, Epson Connect, Brother) — same Gmail send — or an IPP
+URI when this computer can see the printer. Commercial ebooks: store link
+only.
 
 ```sh
 python3 /var/lib/hermes/scripts/connectors.py
 python3 /var/lib/hermes/scripts/gcal.py today
+python3 /var/lib/hermes/scripts/matriz.py day --text "class at 7:30, gym at 3 until 4:20"
 python3 /var/lib/hermes/scripts/gmail.py list
 python3 /var/lib/hermes/scripts/gmail.py kindle --to you@kindle.com --epub /path/day.epub
 python3 /var/lib/hermes/scripts/printer.py probe

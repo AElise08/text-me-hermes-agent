@@ -35,22 +35,21 @@ python3 /var/lib/hermes/scripts/gmail.py list
 python3 /var/lib/hermes/scripts/gmail.py get MESSAGE_ID
 python3 /var/lib/hermes/scripts/gmail.py kindle --to name@kindle.com --epub PATH
 python3 /var/lib/hermes/scripts/overnight.py --no-apply
-python3 /var/lib/hermes/scripts/matriz.py slot add --text "Aula" --start 2026-09-17T07:30:00-03:00 --end 2026-09-17T09:20:00-03:00
-python3 /var/lib/hermes/scripts/matriz.py slot add --text "Fisioterapia" --start 2026-09-17T15:00:00-03:00 --end 2026-09-17T16:20:00-03:00
+python3 /var/lib/hermes/scripts/matriz.py day --text "class at 7:30, free between 9:20 and 11:10, gym at 3 until 4:20"
 python3 /var/lib/hermes/scripts/gcal.py on --date 2026-09-17
 python3 /var/lib/hermes/scripts/printer.py probe
 ```
 
-Clock times they already have (class, physio, a free window they named) go
-on the calendar with `slot add` — every interval, same turn. "ok" after a
-full day dump books the whole grid. Focus blocks you invent still need
-"ok" / "tá bom" / "sim", then `block start`.
+Clock times they already have go through **one** `matriz.py day --text "..."` —
+their full message, every interval, whoever they are. Never `block start` for
+only the gap. Latch is optional; REST is enough. Focus blocks you invent still
+need "ok" / "tá bom" / "sim", then `block start`.
 Extensions ("mais 20") are how duration is learned. `block close` writes the
 sample. Next `duration suggest` uses the median actual, not the guess.
 
 Google: see `references/calendar.md`. Default is REST with the plow-agents
-account token — no Mac, no Latch. That path reads Calendar, reads Gmail,
-and sends mail (EPUB → Kindle, PDF → printer email). Latch is optional.
+account token — Latch is optional. That path reads Calendar, reads Gmail,
+and sends mail (EPUB → Kindle, PDF → printer email). Latch is not required.
 
 Kindle: `edition_hour` is **in their hand**. Mail 5 minutes earlier
 (6:00 → 5:55). If it landed, do not text the phone. Title is "Seu Report

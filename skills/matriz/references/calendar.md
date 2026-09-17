@@ -24,13 +24,15 @@ python3 /var/lib/hermes/scripts/gmail.py kindle --to you@kindle.com --epub /path
 python3 /var/lib/hermes/scripts/printer.py probe
 ```
 
-Clock times they already have (aula, fisioterapia, a named free window) go
-on the calendar with `matriz.py slot add` — **every** interval in that turn.
-"ok / coloca no calendário" after a full day dump books the **whole grid**,
-not one focus line. `block start` is for a focus block you proposed.
+Clock times they already have go through `matriz.py day --text "the whole
+message"` — **every** interval they named, for whoever they are. Never
+`block start` for only one gap. Latch is optional.
 
-After they say ok / tá bom / sim to a **proposed** focus block, `matriz.py
-block start` creates that Google event on this path.
+After they say ok / tá bom / sim to a **proposed** focus block you invented,
+`matriz.py block start` creates that Google event on this path.
+
+After they say ok / tá bom / sim to a **proposed** focus block you invented,
+`matriz.py block start` creates that Google event on this path.
 
 `matriz.py edition` writes EPUB + PDF. Kindle gets the EPUB. Printer and
 email get the PDF. Mail it when an address is set (`--kindle-email`,
