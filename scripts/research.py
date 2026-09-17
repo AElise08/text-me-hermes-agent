@@ -44,7 +44,7 @@ CARTOON_Q = {
     "it": "vignetta",
     "ja": "風刺漫画",
     "nl": "spotprent",
-    "pt": "charge editorial",
+    "pt": "charge do dia",
 }
 
 _TAG = re.compile(r"<[^>]+>")
