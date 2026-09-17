@@ -129,6 +129,29 @@ def events_on(when: datetime | None = None) -> list[dict]:
     return out
 
 
+def clock(stamp: str) -> str:
+    if not stamp:
+        return ""
+    if "T" in stamp:
+        return stamp.split("T", 1)[1][:5]
+    return ""
+
+
+def line(event: dict) -> str:
+    """One calendar row: 07:30–09:20 Aula — the morning page opener."""
+    start, end = clock(event.get("start") or ""), clock(event.get("end") or "")
+    title = (event.get("summary") or "").strip()
+    if start and end:
+        return f"{start}–{end}  {title}".strip()
+    if start:
+        return f"{start}  {title}".strip()
+    return title
+
+
+def day_lines(when: datetime | None = None) -> list[str]:
+    return [line(event) for event in events_on(when) if line(event)]
+
+
 def events_today() -> list[dict]:
     return events_on()
 

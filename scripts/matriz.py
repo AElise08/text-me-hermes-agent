@@ -668,6 +668,11 @@ def main() -> None:
             )
         else:
             inbox = []
+        if not extra.get("meetings"):
+            try:
+                extra["meetings"] = gcal_mod.day_lines(edition_mod.as_of()) if gcal_mod.token() else []
+            except SystemExit:
+                extra["meetings"] = extra.get("meetings") or []
         used = " ".join((extra.get("readings") or []) + (extra.get("hobbies") or [])).lower()
         web = research_mod.clips(
             profile.get("interests") or [],
@@ -687,7 +692,7 @@ def main() -> None:
             extra["charge"] = research_mod.charge(lang)
         if args.extra_file:
             researched = json.loads(Path(args.extra_file).read_text(encoding="utf-8"))
-            for key in ("title", "focus", "clips", "readings", "hobbies", "charge"):
+            for key in ("title", "focus", "clips", "readings", "hobbies", "charge", "meetings"):
                 if researched.get(key):
                     extra[key] = researched[key]
         dest = home() / ".matriz" / "editions"

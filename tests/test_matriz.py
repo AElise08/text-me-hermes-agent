@@ -297,13 +297,21 @@ class MatrixTests(unittest.TestCase):
                 "title": "Seu Report Diário — 17/09",
                 "clips": ["IA na educação: resumo curto de uma frase."],
                 "charge": ["Charge do dia — The Guardian https://example.com/c"],
+                "meetings": ["07:30–09:20  Aula"],
             }), encoding="utf-8")
+            self.cli(h, "language", "set", "pt")
             out = self.cli(h, "edition", "--no-send", "--extra-file", str(extra))
             md = Path(out["markdown"]).read_text(encoding="utf-8")
             self.assertTrue(out["title"].startswith("Seu Report Diário"))
             self.assertIn("IA na educação", md)
             self.assertIn("## Charge", md)
             self.assertIn("The Guardian", md)
+            self.assertIn("## Pra começar o dia", md)
+            self.assertIn("07:30–09:20  Aula", md)
+            self.assertIn("## Pelos teus interesses", md)
+            start = md.index("## Pra começar o dia")
+            news = md.index("## Pelos teus interesses")
+            self.assertLess(start, news)
 
     def test_title_date_is_the_local_day_not_the_extra_file(self):
         import importlib.util
@@ -326,6 +334,47 @@ class MatrixTests(unittest.TestCase):
         self.assertIn("16/09", md)
         self.assertNotIn("Rotina", md)
         self.assertNotIn("7h30", md)
+
+    def test_charge_image_is_inside_the_epub(self):
+        from io import BytesIO
+        from PIL import Image
+
+        buf = BytesIO()
+        Image.new("RGB", (12, 8), (200, 40, 40)).save(buf, format="JPEG")
+        with tempfile.TemporaryDirectory() as h:
+            extra = Path(h) / "extra.json"
+            extra.write_text(json.dumps({
+                "meetings": ["07:30–09:20  Aula"],
+                "charge": [{"title": "Charge do dia", "line": "Charge do dia", "file": "skip"}],
+            }), encoding="utf-8")
+            # extra-file cannot carry bytes; dump via compose helper
+            import importlib.util, sys
+            scripts = str(ROOT / "scripts")
+            if scripts not in sys.path:
+                sys.path.insert(0, scripts)
+            spec = importlib.util.spec_from_file_location("edition", ROOT / "scripts" / "edition.py")
+            edition = importlib.util.module_from_spec(spec)
+            spec.loader.exec_module(edition)
+            dest = Path(h) / "editions"
+            out = edition.dump(
+                {"language": "pt", "goals": {}, "tasks": [], "profile": {}, "blocks": []},
+                dest,
+                datetime.now(timezone.utc),
+                extra={
+                    "meetings": ["07:30–09:20  Aula"],
+                    "charge": [{"title": "Charge do dia", "line": "Charge do dia", "image": buf.getvalue()}],
+                    "clips": ["Uma notícia"],
+                },
+            )
+            md = Path(out["markdown"]).read_text(encoding="utf-8")
+            self.assertIn("## Pra começar o dia", md)
+            self.assertIn("07:30–09:20  Aula", md)
+            self.assertIn("![Charge](charge-0.jpg)", md)
+            self.assertIn("## Pelos teus interesses", md)
+            with zipfile.ZipFile(out["epub"]) as zf:
+                names = zf.namelist()
+                self.assertIn("OEBPS/charge-0.jpg", names)
+                self.assertTrue(zf.read("OEBPS/charge-0.jpg")[:3] == b"\xff\xd8\xff")
 
     def test_profile_name_survives(self):
         with tempfile.TemporaryDirectory() as h:

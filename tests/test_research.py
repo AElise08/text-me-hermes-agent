@@ -102,12 +102,18 @@ class ResearchTests(unittest.TestCase):
             return payload
 
         with patch.object(research, "fetch", side_effect=fake_fetch):
-            out = research.charge("de", now=NOW)
+            with patch.object(research, "image_for", return_value=b""):
+                out = research.charge("de", now=NOW)
         self.assertEqual(len(out), 1)
-        self.assertIn("Karikatur am Morgen", out[0])
-        self.assertIn("https://ex.test/toon", out[0])
+        self.assertEqual(out[0]["title"], "Karikatur am Morgen")
+        self.assertIn("https://ex.test/toon", out[0]["link"])
         self.assertIn("hl=de", captured[0])
         self.assertIn("Karikatur", captured[0])
+
+    def test_og_image_from_article_html(self):
+        research = load()
+        html = '<meta property="og:image" content="https://ex.test/c.jpg">'
+        self.assertEqual(research.og_image(html), "https://ex.test/c.jpg")
 
 
 if __name__ == "__main__":

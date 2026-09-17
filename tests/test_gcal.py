@@ -41,3 +41,12 @@ class GcalTests(unittest.TestCase):
         self.assertEqual(captured["action"], "calendar.events.create")
         self.assertEqual(captured["body"]["summary"], "edit video")
         self.assertEqual(out["data"]["id"], "evt1")
+
+    def test_line_is_clock_then_title(self):
+        gcal = load_gcal()
+        text = gcal.line({
+            "summary": "Aula",
+            "start": "2026-09-17T07:30:00-03:00",
+            "end": "2026-09-17T09:20:00-03:00",
+        })
+        self.assertEqual(text, "07:30–09:20  Aula")

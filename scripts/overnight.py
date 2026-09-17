@@ -310,9 +310,7 @@ def run(
         "already": already[:6],
         "readings": _unique_lines(_known_bits(state or {}, "reading"), readings),
         "hobbies": _unique_lines(_known_bits(state or {}, "hobby"), hobbies),
-        "meetings": [
-            f"{(e.get('start') or '')} {e.get('summary')}" for e in events
-        ],
+        "meetings": [gcal_mod.line(e) for e in events if gcal_mod.line(e)],
         "spheres": {k: sorted(v) for k, v in spheres.items()},
     }
 

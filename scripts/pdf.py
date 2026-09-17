@@ -8,6 +8,7 @@ not EPUB.
 from __future__ import annotations
 
 import argparse
+import re
 from io import BytesIO
 from pathlib import Path
 
@@ -64,20 +65,43 @@ def _wrap(draw: ImageDraw.ImageDraw, text: str, font, width: int) -> list[str]:
     return lines or [""]
 
 
-def pages_from_markdown(markdown: str) -> list[Image.Image]:
+_IMG = re.compile(r"!\[([^\]]*)\]\(([^)]+)\)")
+
+
+def pages_from_markdown(markdown: str, images: dict[str, bytes] | None = None) -> list[Image.Image]:
+    images = images or {}
     body_font = _font(28)
     h1, h2 = _font(44, bold=True), _font(34, bold=True)
     italic = _font(24)
     width = A4[0] - 2 * MARGIN
+    paper = (247, 243, 234)
+    ink = (26, 22, 18)
     pages: list[Image.Image] = []
 
     def new_page() -> tuple[Image.Image, ImageDraw.ImageDraw, int]:
-        img = Image.new("RGB", A4, "white")
+        img = Image.new("RGB", A4, paper)
         return img, ImageDraw.Draw(img), MARGIN
 
     img, draw, y = new_page()
     for raw in markdown.splitlines():
         line = raw.rstrip()
+        pictured = _IMG.search(line)
+        if pictured:
+            blob = images.get(pictured.group(2))
+            if blob:
+                from io import BytesIO
+                pic = Image.open(BytesIO(blob)).convert("RGB")
+                max_w = width
+                max_h = 720
+                scale = min(max_w / pic.width, max_h / pic.height, 1.0)
+                size = (int(pic.width * scale), int(pic.height * scale))
+                pic = pic.resize(size, Image.LANCZOS)
+                if y + size[1] > A4[1] - MARGIN:
+                    pages.append(img)
+                    img, draw, y = new_page()
+                img.paste(pic, (MARGIN, y))
+                y += size[1] + 18
+                continue
         if line.startswith("# "):
             font, text, gap = h1, line[2:], 18
         elif line.startswith("## "):
@@ -97,7 +121,7 @@ def pages_from_markdown(markdown: str) -> list[Image.Image]:
             pages.append(img)
             img, draw, y = new_page()
         for row in wrapped:
-            draw.text((MARGIN, y), row, fill="black", font=font)
+            draw.text((MARGIN, y), row, fill=ink, font=font)
             y += getattr(font, "size", 14) + 8
         y += gap
     pages.append(img)
@@ -156,9 +180,9 @@ def _pdf_from_jpegs(jpegs: list[bytes], size: tuple[int, int]) -> bytes:
     return bytes(out)
 
 
-def write_pdf(path: Path, markdown: str) -> None:
+def write_pdf(path: Path, markdown: str, images: dict[str, bytes] | None = None) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
-    pages = pages_from_markdown(markdown)
+    pages = pages_from_markdown(markdown, images)
     pdf = _pdf_from_jpegs([_jpeg(p) for p in pages], A4)
     path.write_bytes(pdf)
 

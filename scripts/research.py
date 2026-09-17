@@ -47,7 +47,20 @@ CARTOON_Q = {
     "pt": "charge do dia",
 }
 
+_OG = re.compile(
+    r'<meta[^>]+(?:property|name)=["\']og:image["\'][^>]+content=["\']([^"\']+)',
+    re.I,
+)
+_OG_REV = re.compile(
+    r'<meta[^>]+content=["\']([^"\']+)["\'][^>]+(?:property|name)=["\']og:image["\']',
+    re.I,
+)
+_MEDIA = "{http://search.yahoo.com/mrss/}"
 _TAG = re.compile(r"<[^>]+>")
+
+
+def _plain(text: str) -> str:
+    return html.unescape(_TAG.sub("", text or "")).strip()
 
 
 def tag(language: str) -> str:
@@ -85,8 +98,64 @@ def fetch(url: str) -> bytes:
         return response.read()
 
 
-def _plain(text: str) -> str:
-    return html.unescape(_TAG.sub("", text or "")).strip()
+def _image_url(node: ET.Element) -> str:
+    for name in ("content", "thumbnail"):
+        el = node.find(_MEDIA + name)
+        if el is not None and (el.get("url") or "").strip():
+            return el.get("url").strip()
+    enc = node.find("enclosure")
+    if enc is not None:
+        typ = (enc.get("type") or "").lower()
+        url = (enc.get("url") or "").strip()
+        if url and (typ.startswith("image") or url.lower().endswith((".jpg", ".jpeg", ".png", ".webp", ".gif"))):
+            return url
+    return ""
+
+
+def og_image(html_text: str) -> str:
+    match = _OG.search(html_text) or _OG_REV.search(html_text)
+    return html.unescape(match.group(1).strip()) if match else ""
+
+
+def fetch_image(url: str) -> bytes:
+    if not url:
+        return b""
+    req = urllib.request.Request(url, headers={"User-Agent": UA, "Accept": "image/*,*/*"})
+    with urllib.request.urlopen(req, timeout=TIMEOUT) as response:
+        data = response.read(2_000_000)
+        ctype = (response.headers.get("Content-Type") or "").lower()
+    if data[:3] == b"\xff\xd8\xff" or data[:8] == b"\x89PNG\r\n\x1a\n" or data[:4] == b"RIFF" or "image/" in ctype:
+        return data
+    return b""
+
+
+def image_for(article_url: str, rss_image: str = "") -> bytes:
+    """Bytes of the cartoon. RSS media first, then og:image on the article."""
+    if rss_image:
+        try:
+            data = fetch_image(rss_image)
+            if data:
+                return data
+        except (urllib.error.URLError, TimeoutError, OSError, ValueError):
+            pass
+    if not article_url:
+        return b""
+    try:
+        page = fetch(article_url).decode("utf-8", "replace")
+    except (urllib.error.URLError, TimeoutError, OSError, ValueError):
+        return b""
+    src = og_image(page)
+    if not src:
+        return b""
+    if src.startswith("//"):
+        src = "https:" + src
+    elif src.startswith("/") and article_url.startswith("http"):
+        parts = urllib.parse.urlsplit(article_url)
+        src = f"{parts.scheme}://{parts.netloc}{src}"
+    try:
+        return fetch_image(src)
+    except (urllib.error.URLError, TimeoutError, OSError, ValueError):
+        return b""
 
 
 def _when(node: ET.Element) -> datetime | None:
@@ -102,8 +171,8 @@ def _when(node: ET.Element) -> datetime | None:
     return dt.astimezone(timezone.utc)
 
 
-def items(payload: bytes) -> list[tuple[str, str, str, datetime | None]]:
-    out: list[tuple[str, str, str, datetime | None]] = []
+def items(payload: bytes) -> list[tuple[str, str, str, datetime | None, str]]:
+    out: list[tuple[str, str, str, datetime | None, str]] = []
     try:
         root = ET.fromstring(payload)
     except ET.ParseError:
@@ -116,25 +185,25 @@ def items(payload: bytes) -> list[tuple[str, str, str, datetime | None]]:
         if src is not None and (src.text or "").strip():
             source = _plain(src.text)
         if title:
-            out.append((title, link, source, _when(node)))
+            out.append((title, link, source, _when(node), _image_url(node)))
     return out
 
 
 def _fresh(
-    rows: list[tuple[str, str, str, datetime | None]],
+    rows: list[tuple[str, str, str, datetime | None, str]],
     now: datetime | None = None,
     max_age: timedelta | None = None,
-) -> list[tuple[str, str, str]]:
+) -> list[tuple[str, str, str, str]]:
     """Keep only items dated within max_age. Undated rows are old, skip them."""
     now = now or datetime.now(timezone.utc)
     window = max_age if max_age is not None else MAX_AGE
-    kept: list[tuple[str, str, str]] = []
-    for title, link, source, published in rows:
+    kept: list[tuple[str, str, str, str]] = []
+    for title, link, source, published, image in rows:
         if published is None:
             continue
         if now - published > window:
             continue
-        kept.append((title, link, source))
+        kept.append((title, link, source, image))
     return kept
 
 
@@ -165,7 +234,7 @@ def clips(
             rows = _fresh(items(fetch(url)), now=now)
         except (urllib.error.URLError, TimeoutError, OSError, ValueError):
             continue
-        for title, _link, source in rows:
+        for title, _link, source, _image in rows:
             blob = f"{title} {source}".lower()
             if any(term in blob for term in avoid_l):
                 continue
@@ -179,8 +248,8 @@ def clips(
     return found
 
 
-def charge(language: str = "", now: datetime | None = None) -> list[str]:
-    """One recent cartoon in the speaker's language, with its source link."""
+def charge(language: str = "", now: datetime | None = None) -> list[dict]:
+    """One recent cartoon in the speaker's language, with image bytes when we can."""
     query = CARTOON_Q.get(tag(language).split("-")[0][:2] or "en", "editorial cartoon")
     hl, gl, ceid = locale(language)
     url = NEWS.format(q=urllib.parse.quote(query), hl=hl, gl=gl, ceid=ceid)
@@ -190,8 +259,15 @@ def charge(language: str = "", now: datetime | None = None) -> list[str]:
         return []
     if not rows:
         return []
-    title, link, source = rows[0]
-    return [_line(title, source or query, link)]
+    title, link, source, rss_image = rows[0]
+    picture = image_for(link, rss_image)
+    return [{
+        "title": title,
+        "source": source or query,
+        "link": link,
+        "line": _line(title, source or query),
+        "image": picture,
+    }]
 
 
 def main() -> int:
@@ -205,7 +281,10 @@ def main() -> int:
     avoid = [x.strip() for x in args.avoid.split(",") if x.strip()]
     out = {
         "clips": clips(interests, avoid, args.language),
-        "charge": charge(args.language) if args.charge else [],
+        "charge": [
+            {k: v for k, v in row.items() if k != "image"} | {"has_image": bool(row.get("image"))}
+            for row in (charge(args.language) if args.charge else [])
+        ],
         "locale": list(locale(args.language)),
     }
     json.dump(out, sys.stdout, ensure_ascii=False)

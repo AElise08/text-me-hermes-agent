@@ -26,12 +26,13 @@ OPF = """<?xml version="1.0" encoding="UTF-8"?>
 <package xmlns="http://www.idpf.org/2007/opf" unique-identifier="BookId" version="2.0">
   <metadata xmlns:dc="http://purl.org/dc/elements/1.1/">
     <dc:title>{title}</dc:title>
-    <dc:language>en</dc:language>
+    <dc:language>{lang}</dc:language>
     <dc:identifier id="BookId">text-me-{day}</dc:identifier>
   </metadata>
   <manifest>
     <item id="ncx" href="toc.ncx" media-type="application/x-dtbncx+xml"/>
     <item id="body" href="body.html" media-type="application/xhtml+xml"/>
+    {images}
   </manifest>
   <spine toc="ncx">
     <itemref idref="body"/>
@@ -50,9 +51,18 @@ NCX = """<?xml version="1.0" encoding="UTF-8"?>
 """
 
 
+_IMG = re.compile(r"!\[([^\]]*)\]\(([^)]+)\)")
+
+
 def md_to_html(md: str) -> str:
     lines = []
     for raw in md.splitlines():
+        pictured = _IMG.search(raw)
+        if pictured:
+            alt = html.escape(pictured.group(1))
+            src = html.escape(pictured.group(2))
+            lines.append(f'<p><img alt="{alt}" src="{src}" style="width:100%;max-width:100%;"/></p>')
+            continue
         line = html.escape(raw)
         if line.startswith("### "):
             lines.append(f"<h3>{line[4:]}</h3>")
@@ -70,19 +80,41 @@ def md_to_html(md: str) -> str:
     return (
         '<?xml version="1.0" encoding="UTF-8"?>\n'
         '<html xmlns="http://www.w3.org/1999/xhtml">'
-        f"<head><title>text-me</title></head><body>{body}</body></html>"
+        "<head><title>text-me</title>"
+        "<style type=\"text/css\">body{font-family:Georgia,serif;margin:1.2em}"
+        "h1{font-size:1.6em;border-bottom:2px solid #222;padding-bottom:.2em}"
+        "h2{font-size:1.05em;letter-spacing:.08em;text-transform:uppercase;margin-top:1.4em}"
+        "img{width:100%;height:auto}</style></head><body>"
+        f"{body}</body></html>"
     )
 
 
-def write_epub(path: Path, title: str, markdown: str, day: str) -> None:
+def write_epub(
+    path: Path,
+    title: str,
+    markdown: str,
+    day: str,
+    images: list[tuple[str, bytes, str]] | None = None,
+    lang: str = "en",
+) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
+    images = images or []
+    manifest = "\n    ".join(
+        f'<item id="img{i}" href="{html.escape(name)}" media-type="{mime}"/>'
+        for i, (name, _data, mime) in enumerate(images)
+    )
     xhtml = md_to_html(markdown)
     with zipfile.ZipFile(path, "w") as zf:
         zf.writestr("mimetype", "application/epub+zip", compress_type=zipfile.ZIP_STORED)
         zf.writestr("META-INF/container.xml", CONTAINER)
-        zf.writestr("OEBPS/content.opf", OPF.format(title=html.escape(title), day=day))
+        zf.writestr(
+            "OEBPS/content.opf",
+            OPF.format(title=html.escape(title), day=day, lang=html.escape(lang[:8] or "en"), images=manifest),
+        )
         zf.writestr("OEBPS/toc.ncx", NCX.format(title=html.escape(title), day=day))
         zf.writestr("OEBPS/body.html", xhtml)
+        for name, data, _mime in images:
+            zf.writestr(f"OEBPS/{name}", data)
 
 
 def as_of(when: datetime | None = None) -> datetime:
@@ -195,6 +227,25 @@ def compose(state: dict, when: datetime, extra: dict | None = None) -> str:
     work_l = "Trabalho" if pt else "Work"
     life_l = "Vida" if pt else "Life"
     lines = [f"# {title}", ""]
+    meetings = extra.get("meetings") or []
+    if meetings:
+        lines.append("## " + ("Pra começar o dia" if pt else "To start the day"))
+        for item in meetings:
+            lines.append(f"- {item}")
+        lines.append("")
+    cartoon = extra.get("charge") or []
+    if cartoon:
+        lines.append("## Charge")
+        for item in cartoon:
+            if isinstance(item, dict):
+                caption = item.get("line") or item.get("title") or ""
+                if caption:
+                    lines.append(f"- {caption}")
+                if item.get("file"):
+                    lines.append(f"![Charge]({item['file']})")
+            else:
+                lines.append(f"- {item}")
+        lines.append("")
     fires = extra.get("fires") or extra.get("needs") or []
     split = _by_sphere(fires)
     fire_lines = []
@@ -242,12 +293,6 @@ def compose(state: dict, when: datetime, extra: dict | None = None) -> str:
         for item in hobbies:
             lines.append(f"- {item}")
         lines.append("")
-    meetings = extra.get("meetings") or []
-    if meetings:
-        lines.append("## " + ("Hoje na agenda" if pt else "On the calendar"))
-        for item in meetings:
-            lines.append(f"- {item}")
-        lines.append("")
     focus = extra.get("focus") or []
     if not focus:
         focus = focus_lines(active, pt)
@@ -274,14 +319,8 @@ def compose(state: dict, when: datetime, extra: dict | None = None) -> str:
         lines.append("")
     interests = extra.get("clips") or []
     if interests:
-        lines.append("## " + ("Pra começar o dia" if pt else "To start the day"))
+        lines.append("## " + ("Pelos teus interesses" if pt else "From your interests"))
         for item in interests:
-            lines.append(f"- {item}")
-        lines.append("")
-    cartoon = extra.get("charge") or []
-    if cartoon:
-        lines.append("## Charge")
-        for item in cartoon:
             lines.append(f"- {item}")
         lines.append("")
     avoid = profile.get("avoid") or []
@@ -290,20 +329,47 @@ def compose(state: dict, when: datetime, extra: dict | None = None) -> str:
     return "\n".join(lines).rstrip() + "\n"
 
 
+def _jpeg(data: bytes) -> bytes:
+    from io import BytesIO
+    from PIL import Image
+
+    img = Image.open(BytesIO(data)).convert("RGB")
+    buf = BytesIO()
+    img.save(buf, format="JPEG", quality=85)
+    return buf.getvalue()
+
+
 def dump(state: dict, dest_dir: Path, when: datetime, extra: dict | None = None) -> dict:
     extra = extra or {}
     when = as_of(when)
     day = when.date().isoformat()
-    markdown = compose(state, when, extra)
     dest_dir.mkdir(parents=True, exist_ok=True)
+    packed: list[tuple[str, bytes, str]] = []
+    charge_rows = []
+    for i, item in enumerate(extra.get("charge") or []):
+        if not isinstance(item, dict):
+            charge_rows.append(item)
+            continue
+        row = dict(item)
+        blob = row.pop("image", None) or b""
+        if blob:
+            name = f"charge-{i}.jpg"
+            jpeg = _jpeg(blob)
+            (dest_dir / name).write_bytes(jpeg)
+            row["file"] = name
+            packed.append((name, jpeg, "image/jpeg"))
+        charge_rows.append(row)
+    extra = {**extra, "charge": charge_rows}
+    markdown = compose(state, when, extra)
     md_path = dest_dir / f"{day}.md"
     epub_path = dest_dir / f"{day}.epub"
     pdf_path = dest_dir / f"{day}.pdf"
     md_path.write_text(markdown, encoding="utf-8")
-    pt = (state.get("language") or "").lower().startswith("pt")
+    lang = (state.get("language") or "en")[:8]
+    pt = lang.lower().startswith("pt")
     title = stamp_title(pt, when, extra)
-    write_epub(epub_path, title, markdown, day)
-    pdf_mod.write_pdf(pdf_path, markdown)
+    write_epub(epub_path, title, markdown, day, packed, lang=lang or "en")
+    pdf_mod.write_pdf(pdf_path, markdown, images={name: data for name, data, _mime in packed})
     return {
         "day": day,
         "title": title,
