@@ -15,7 +15,8 @@
     "work_about": [],
     "life_about": [],
     "edition_hour": 7,
-    "timezone": ""
+    "timezone": "",
+    "charge": false
   },
   "known": {"work": [], "life": [], "reading": [], "hobby": []},
   "durations": {},

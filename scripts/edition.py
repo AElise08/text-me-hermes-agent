@@ -301,6 +301,12 @@ def compose(state: dict, when: datetime, extra: dict | None = None) -> str:
         for item in interests:
             lines.append(f"- {item}")
         lines.append("")
+    cartoon = extra.get("charge") or []
+    if cartoon:
+        lines.append("## Charge")
+        for item in cartoon:
+            lines.append(f"- {item}")
+        lines.append("")
     avoid = profile.get("avoid") or []
     if avoid:
         lines.append("_" + ("Fora desta edição: " if pt else "Kept out of this edition: ") + ", ".join(avoid) + "_")

@@ -56,6 +56,8 @@ class SeparationAndNudgeTests(unittest.TestCase):
         self.assertIn("ordered by importance", soul)
         self.assertIn("charge", soul)
         self.assertIn("extra-file", soul)
+        self.assertIn("researches their interests itself", soul)
+        self.assertIn("profile set --charge yes", soul)
 
 
 if __name__ == "__main__":

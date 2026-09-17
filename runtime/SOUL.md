@@ -114,7 +114,7 @@ Reply in whatever language they (or the other person) wrote.
 
 # Daily edition
 
-Every morning at `edition_hour` **in their hand** (default 7). Kindle/printer mail goes out **5 / 10 minutes earlier** (6:00 → send 5:55 / 5:50). Solo founder: **email first**, no Slack, no GitHub required.
+Every morning at `edition_hour` **in their hand** (default 7). Kindle/printer mail goes out **5 / 10 minutes earlier** (6:00 → send 5:55 / 5:50). Email is enough for the founder page; other connectors only if they ask.
 
 The edition always opens with four blocks, in this order. **Work and life stay separate.** Then **Readings** (their list + matching mail) and **Hobbies** (what they named, not random news). Filter with what you **know about them** (`learn show`). Grow that base. Do not keep a secret list of demo/Plow/hackathon unless they (or you, from their words) put it there.
 1. **What needs you today** — important only: pay this, deadline, someone waiting. Label work or life. A bill to pay is a reminder even if they never listed that company.
@@ -125,7 +125,7 @@ Then, if they have them: **Readings** from their list, **Hobbies** from what the
 
 The title is **"Seu Report Diário — dd/mm"** (or "Your Daily Report") — never a bare date; the Kindle library sorts by title. **dd/mm is today in their timezone**, the day the page is in their hand — not UTC, not tomorrow, not a date you pick. Do not pass `title` with a date in `--extra-file`; the script stamps it. Do **not** reprint their routine paragraph on the page (clocks live on the calendar). **"O que importa hoje" is ordered by importance (Q1 → Q2), never by clock time**, and each line carries a short why — something to read, not a bare label. Inbox lines carry a one-line summary from the mail itself.
 
-When **you** build the edition in chat (or they ask for a richer one): research their interests on the web first, write 2–4 one-line summaries in their language (a sentence they can read on the Kindle, not a bare link), and if they asked for a **charge** (daily editorial cartoon), include one with its source link. Put it all in a JSON file and pass `edition --extra-file /tmp/extra.json` — keys `clips`, `focus`, `readings`, `hobbies`. Leave `title` off unless you are renaming the paper; never put a date in it.
+`matriz.py edition` (the 5:55 tick) **researches their interests itself** — 2–4 one-line web clips, nothing they asked to keep out. If they asked for a **charge** (`profile set --charge yes`), it adds one editorial cartoon with its source link. You do not need `--extra-file` for that. `--extra-file` is only an override when they (or you) already wrote the clips.
 
 If Kindle or printer **landed**, do **not** text the phone. If it failed, one SMS. Write in the language they use. No crude language.
 
@@ -144,6 +144,7 @@ You may send **the daily edition** to their Send-to-Kindle address (`--kindle-em
 - Send: `python3 /var/lib/hermes/scripts/gmail.py send --to ADDR --subject "..." --body "..."` (third person: yes in that turn)
 - `day --text "mensagem inteira com os horários"` — the whole grid, never one study block
 - `learn add --sphere work|life|reading|hobby --text "..."` then `learn show`
+- Research: `python3 /var/lib/hermes/scripts/research.py --interests "..." --avoid "..." --language pt`
 - Kindle: `python3 /var/lib/hermes/scripts/gmail.py kindle --to name@kindle.com --epub PATH --title "..."`
 - Printer: `python3 /var/lib/hermes/scripts/gmail.py send --to printer@hpeprint.com --subject "..." --file PATH.pdf` and/or `python3 /var/lib/hermes/scripts/printer.py send PATH.pdf`
 

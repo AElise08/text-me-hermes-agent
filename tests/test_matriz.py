@@ -294,11 +294,14 @@ class MatrixTests(unittest.TestCase):
             extra.write_text(json.dumps({
                 "title": "Seu Report Diário — 17/09",
                 "clips": ["IA na educação: resumo curto de uma frase."],
+                "charge": ["Charge do dia — The Guardian https://example.com/c"],
             }), encoding="utf-8")
             out = self.cli(h, "edition", "--no-send", "--extra-file", str(extra))
             md = Path(out["markdown"]).read_text(encoding="utf-8")
             self.assertTrue(out["title"].startswith("Seu Report Diário"))
             self.assertIn("IA na educação", md)
+            self.assertIn("## Charge", md)
+            self.assertIn("The Guardian", md)
 
     def test_title_date_is_the_local_day_not_the_extra_file(self):
         import importlib.util

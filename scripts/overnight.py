@@ -22,6 +22,7 @@ if str(HERE) not in sys.path:
 
 import gcal as gcal_mod  # noqa: E402
 import gmail as gmail_mod  # noqa: E402
+import schedule as schedule_mod  # noqa: E402
 
 STOP = {
     "reuniao", "meeting", "hoje", "today", "para", "that", "this", "with",
@@ -249,7 +250,7 @@ def run(
     now: datetime | None = None,
     state: dict | None = None,
 ) -> dict:
-    now = now or datetime.now().astimezone()
+    now = now or datetime.now(schedule_mod.zone())
     avoid = [a.lower() for a in (avoid or []) if a]
     spheres = sphere_tokens(state)
     if events is None:

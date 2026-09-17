@@ -22,6 +22,7 @@ import gcal as gcal_mod  # noqa: E402
 import gmail as gmail_mod  # noqa: E402
 import overnight as overnight_mod  # noqa: E402
 import printer as printer_mod  # noqa: E402
+import research as research_mod  # noqa: E402
 
 CATS = ("work", "life")
 LANES = ("work", "life", "reading", "hobby")
@@ -51,6 +52,8 @@ def blank_profile() -> dict:
         "work_about": [],
         "life_about": [],
         "edition_hour": 7,
+        "timezone": "",
+        "charge": False,
     }
 
 
@@ -325,6 +328,7 @@ def parse() -> argparse.Namespace:
     set_profile.add_argument("--life-about")
     set_profile.add_argument("--edition-hour", type=int)
     set_profile.add_argument("--timezone", help="IANA name, e.g. America/Belem")
+    set_profile.add_argument("--charge", choices=["yes", "no"], help="editorial cartoon on the morning page")
     set_profile.add_argument("--done", action="store_true")
 
     known = sub.add_parser("learn")
@@ -486,6 +490,8 @@ def main() -> None:
                 except Exception:
                     sys.exit(f"unknown timezone: {name} (use an IANA name, e.g. America/Belem)")
                 profile["timezone"] = name
+            if args.charge is not None:
+                profile["charge"] = args.charge == "yes"
             if args.done:
                 profile["setup_done"] = True
             save(data)
@@ -636,6 +642,7 @@ def main() -> None:
     if args.cmd == "edition":
         extra = {"title": args.title} if args.title else {}
         profile = data.get("profile") or {}
+        lang = data.get("language") or ""
         if gcal_mod.token():
             try:
                 report = overnight_mod.run(
@@ -654,16 +661,33 @@ def main() -> None:
                 pt=(data.get("language") or "").lower().startswith("pt"),
             )
             extra["meetings"] = report.get("meetings") or extra.get("meetings") or []
-            used = " ".join(extra["readings"] + extra["hobbies"]).lower()
-            clips = gmail_mod.inbox_clips(
+            extra["hold"] = edition_mod.hold_line(data, extra)
+            inbox = gmail_mod.inbox_clips(
                 profile.get("interests") or [],
                 profile.get("avoid") or [],
             )
-            extra["clips"] = [c for c in clips if c.split(" — ")[0].strip().lower() not in used]
-            extra["hold"] = edition_mod.hold_line(data, extra)
+        else:
+            inbox = []
+        used = " ".join((extra.get("readings") or []) + (extra.get("hobbies") or [])).lower()
+        web = research_mod.clips(
+            profile.get("interests") or [],
+            profile.get("avoid") or [],
+            lang,
+        )
+        merged = []
+        seen = set()
+        for line in web + inbox:
+            key = (line.split(" — ")[0].strip().lower())
+            if not key or key in seen or key in used:
+                continue
+            seen.add(key)
+            merged.append(line)
+        extra["clips"] = merged[:6]
+        if profile.get("charge"):
+            extra["charge"] = research_mod.charge(lang)
         if args.extra_file:
             researched = json.loads(Path(args.extra_file).read_text(encoding="utf-8"))
-            for key in ("title", "focus", "clips", "readings", "hobbies"):
+            for key in ("title", "focus", "clips", "readings", "hobbies", "charge"):
                 if researched.get(key):
                     extra[key] = researched[key]
         dest = home() / ".matriz" / "editions"

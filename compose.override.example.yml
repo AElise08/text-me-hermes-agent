@@ -1,5 +1,6 @@
 # Copy to compose.override.yml (gitignored) after minting a line.
-# Timezone and delivery are owner-specific — do not assume a country.
+# Timezone and delivery are the person's — they set those in chat.
+# TZ here is only a fallback until the profile has a timezone.
 #
 # Calendar and Gmail without Latch: mount the plow-agents *account* token.
 # The mint agent token cannot call Google (403).
