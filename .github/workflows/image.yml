@@ -3,6 +3,15 @@ name: image
 on:
   push:
     branches: [main]
+  workflow_dispatch:
+
+concurrency:
+  # Never let an older main build finish later and replace :v1 with stale code.
+  group: ghcr-main
+  cancel-in-progress: false
+
+env:
+  IMAGE: ghcr.io/aelise08/text-me-hermes-agent
 
 permissions:
   contents: read
@@ -29,19 +38,33 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
       - name: Build linux/amd64 image
-        run: docker build --platform linux/amd64 --tag ghcr.io/aelise08/text-me-hermes-agent:v1 .
+        run: |
+          docker build --platform linux/amd64 \
+            --tag "$IMAGE:v1" \
+            --tag "$IMAGE:sha-${GITHUB_SHA}" .
       - name: Push
-        run: docker push ghcr.io/aelise08/text-me-hermes-agent:v1
+        run: |
+          docker push "$IMAGE:v1"
+          docker push "$IMAGE:sha-${GITHUB_SHA}"
       - name: Digest and public package
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          digest=$(docker inspect --format='{{index .RepoDigests 0}}' ghcr.io/aelise08/text-me-hermes-agent:v1)
+          set -euo pipefail
+          digest=$(docker inspect --format='{{index .RepoDigests 0}}' "$IMAGE:sha-${GITHUB_SHA}")
           echo "pushed $digest"
-          echo "$digest" >> "$GITHUB_STEP_SUMMARY"
+          {
+            echo "## Published image"
+            echo
+            echo "\`$digest\`"
+            echo
+            echo "Tags: \`v1\`, \`sha-${GITHUB_SHA}\`"
+          } >> "$GITHUB_STEP_SUMMARY"
+          public=false
           for i in 1 2 3 4 5; do
             gh api --method PATCH -H "Accept: application/vnd.github+json" \
               /user/packages/container/text-me-hermes-agent \
-              -f visibility=public && break
+              -f visibility=public && { public=true; break; }
             sleep 5
           done
+          [ "$public" = true ] || { echo "could not make GHCR package public" >&2; exit 1; }

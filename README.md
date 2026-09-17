@@ -92,21 +92,20 @@ and `mint`.
 ### Cloud custom image
 
 Plow cloud agents now run a **public custom image** — the first step toward
-one-click deploy on the leaderboard. Follow the same flow as
-[plow-agents](https://github.com/plow-pbc/plow-agents): `plow-agents.toml`
-in this repo already names the image, so you can omit it on the CLI.
+one-click deploy on the leaderboard. A push to `main` builds and publishes the
+linux/amd64 image in GitHub Actions. It keeps `:v1` as the latest validated
+image and creates an immutable `:sha-<commit>` tag; the Action summary prints
+the digest for deployment. `plow-agents.toml` already names the image, so you
+can omit it on the CLI.
 
 ```sh
-# classic GitHub PAT with write:packages — fine-grained PATs cannot push GHCR
-docker login ghcr.io -u YOUR_GITHUB_USERNAME
-
-plow-agents image build          # linux/amd64, tag from plow-agents.toml
-plow-agents image push           # prints ghcr.io/…/text-me-hermes-agent@sha256:…
+# GitHub → Actions → image: open the successful run and copy its digest.
+# For a local test only, you can still run: docker compose up --build
 ```
 
-After the first push, make the GHCR package **public** (GitHub → Packages);
-otherwise Plow’s anonymous pull fails. Copy the `repository@sha256:…` line,
-then request it on a **free** line:
+The workflow makes the GHCR package public and fails if that step cannot be
+completed. Copy the `repository@sha256:…` line from the Action summary, then
+request it on a **free** line:
 
 ```sh
 plow-agents deploy ghcr.io/aelise08/text-me-hermes-agent@sha256:… --line ln_xxx
