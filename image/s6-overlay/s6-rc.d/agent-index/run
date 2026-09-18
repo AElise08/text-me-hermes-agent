@@ -1,5 +1,5 @@
 #!/bin/sh
-# Report this agent's token usage to the Agent Index, hourly.
+# Report this agent's token usage to the Agent Index, every 5 minutes.
 #
 # NO SWITCH. The reporter is here because somebody put it in this image, and
 # that is the decision: an agent whose owner does not want their usage on the
@@ -45,26 +45,46 @@ while :; do
   # The pinned client owns assertion exchange, aik_ format and atomic storage.
   # The image only invokes it; no image-owned HTTP path can hand the broad Plow
   # bearer to the Index.
-  if [ ! -s "$HERMES_HOME/.agent-index/token" ]; then
-    /command/s6-setuidgid hermes \
-      env HOME="$HERMES_HOME" AGENT_ID="$AGENT_ID" "$token_name=$plow_token" \
-      /opt/hermes/.venv/bin/python3 /opt/plow/agent-index-client.py \
-      --register --agent "$AGENT_ID" >/dev/null || {
-    echo "agent-index: no index key this hour, not reporting" >&2
-    /bin/sleep 3600
-    continue
-    }
-  fi
+  # Registered already? The client owns that question: it keeps its key in its
+  # own state file and only ever DELETES $HERMES_HOME/.agent-index/token, so a
+  # gate on that path re-registers (and mints a fresh key) every pass.
+  #
+  #   0  registered      3  not registered      2  state is there, unreadable
+  #
+  # 2 is not 3: registering over state the client could not read mints against
+  # a new install id and strands the usage already published. Skip the pass.
+  /command/s6-setuidgid hermes \
+    env HOME="$HERMES_HOME" HERMES_HOME="$HERMES_HOME" AGENT_ID="$AGENT_ID" \
+    /opt/hermes/.venv/bin/python3 /opt/plow/agent-index-client.py status >/dev/null
+  case $? in
+    0) ;;
+    3)
+      /command/s6-setuidgid hermes \
+        env HOME="$HERMES_HOME" AGENT_ID="$AGENT_ID" "$token_name=$plow_token" \
+        /opt/hermes/.venv/bin/python3 /opt/plow/agent-index-client.py \
+        --register --agent "$AGENT_ID" >/dev/null || {
+      echo "agent-index: no index key this pass, not reporting" >&2
+      /bin/sleep 300
+      continue
+      }
+      ;;
+    *)
+      echo "agent-index: the client could not read this install's state (above);" >&2
+      echo "standing off rather than registering over it." >&2
+      /bin/sleep 300
+      continue
+      ;;
+  esac
 
   # No PLOW_AGENT_TOKEN in this environment. The client finds the key the
   # exchange stored in the agent's home and reports with that.
   #
   # Never fatal. A collector that failed says so and exits non-zero; a crashing
-  # longrun would be respawned in a tight loop, which turns one bad hour into a
+  # longrun would be respawned in a tight loop, which turns one bad pass into a
   # hot loop against the index.
   /command/s6-setuidgid hermes \
     env HOME="$HERMES_HOME" HERMES_HOME="$HERMES_HOME" AGENT_ID="$AGENT_ID" \
     /opt/hermes/.venv/bin/python3 /opt/plow/agent-index-client.py \
     || echo "agent-index: reporter exited non-zero, see the line above" >&2
-  /bin/sleep 3600
+  /bin/sleep 300
 done

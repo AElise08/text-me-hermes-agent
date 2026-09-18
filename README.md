@@ -219,7 +219,7 @@ python3 /var/lib/hermes/scripts/printer.py probe
 ## Usage reporting
 
 This image reports token usage to the [Agent Index](https://aiworthusing.com/agent-index/text-me)
-once an hour: day × model counts, nothing else. The listing page (name, repo,
+every 5 minutes: day × model counts, nothing else. The listing page (name, repo,
 video) is **not** published by this boot — that is a separate step.
 
 `AGENT_ID` defaults to `text-me`.
