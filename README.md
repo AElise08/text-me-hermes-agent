@@ -14,12 +14,13 @@ Index listing are **text-me**.
 
 First text is not an interview. "hi" / "oi" already has a language — it
 replies in **that** language only, checks Plow Connectors (Gmail + Calendar,
-no Latch), and proposes one next step from what it found. If mail, calendar,
-and the list are empty, that first reply is:
+no Latch), and proposes one next step from what it found. If they later write
+in Portuguese, it stays in Portuguese. If mail, calendar, and the list are
+empty, that first reply is:
 
-**Send me everything on your plate. I'll organize it and tell you where to start.**
+**Send me everything on your plate. I'll sort life from work, tell you what comes first, and keep mail and the calendar in view.**
 
-(Portuguese, if you wrote in Portuguese: **Despeja o que está na tua cabeça. Eu organizo e te digo por onde começar.**)
+(Portuguese: **Despeja o que está na tua cabeça. Eu separo vida e trabalho, digo o que vem primeiro, e fico de olho no mail e no calendário.**)
 
 The bilingual line is only for a first message with **no words** (empty SMS
 or an untranscribed attachment).

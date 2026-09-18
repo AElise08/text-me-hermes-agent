@@ -54,9 +54,9 @@ if not skip:
 pt = lang.startswith("pt")
 if not work and not life and not any(goals.values()):
     msg = (
-        "Despeja o que está na tua cabeça. Eu organizo e te digo por onde começar."
+        "Despeja o que está na tua cabeça. Eu separo vida e trabalho, digo o que vem primeiro, e fico de olho no mail e no calendário."
         if pt
-        else "Send me everything on your plate. I'll organize it and tell you where to start."
+        else "Send me everything on your plate. I'll sort life from work, tell you what comes first, and keep mail and the calendar in view."
     )
 else:
     parts = []

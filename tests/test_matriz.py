@@ -52,6 +52,37 @@ class MatrixTests(unittest.TestCase):
             self.assertNotIn("on your plate", out)
             self.assertNotIn("most important", out)
 
+    def test_day_board_skips_empty_and_labels_lanes(self):
+        import importlib.util
+        import sys
+        scripts = str(ROOT / "scripts")
+        if scripts not in sys.path:
+            sys.path.insert(0, scripts)
+        spec = importlib.util.spec_from_file_location("edition_board", ROOT / "scripts" / "edition.py")
+        edition = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(edition)
+        md = edition.compose(
+            {"language": "pt", "goals": {}, "tasks": [], "profile": {}},
+            datetime.now(timezone.utc),
+            extra={
+                "exceptions": ["aula das 7h30 já no calendário"],
+                "approvals": [{"text": "fatura da luz", "who": "CPFL"}],
+                "clips": [{"title": "IA na educação", "happened": "x" * 50, "why": "é o que acompanhas"}],
+            },
+        )
+        self.assertIn("## O dia", md)
+        self.assertIn("**Feito:**", md)
+        self.assertIn("**Precisa de ti:**", md)
+        self.assertIn("**A acompanhar:**", md)
+        self.assertNotIn("**Preparado:**", md)
+        empty = edition.compose(
+            {"language": "en", "goals": {}, "tasks": [], "profile": {}},
+            datetime.now(timezone.utc),
+            extra={},
+        )
+        self.assertNotIn("## The day", empty)
+        self.assertNotIn("## O dia", empty)
+
     def test_update_category(self):
         with tempfile.TemporaryDirectory() as h:
             x = self.cli(

@@ -16,7 +16,8 @@ forwards a link that gates a later commitment, or should get the daily edition.
 
 First run: `python3 /var/lib/hermes/scripts/matriz.py profile show`. Then
 `connectors.py`, `gcal.py today`, `gmail.py list` — look before asking.
-A greeting is a language, not an interview. If `setup_done` is false, learn
+A greeting is a language, not an interview. Later Portuguese is Portuguese —
+`language set` every turn they wrote words. If `setup_done` is false, learn
 routine, city (save timezone), interests/avoid, delivery and hour **from what
 they say**, across turns, not as three questions on "hi". Infer work, life,
 readings, and
@@ -61,6 +62,7 @@ Kindle: `edition_hour` is **in their hand**. Mail 5 minutes earlier
 Diário — dd/mm", never a bare date and never mixed language; **dd/mm is today in their timezone**,
 never tomorrow and never a date in `--extra-file`. Do not reprint their
 routine on the page. The briefing order is: today in one sentence →
+O dia (Feito / Preparado / Precisa de ti / A acompanhar; skip empty) →
 Agenda (timeline) → Decisions (3, with a deadline) → Risks → What
 changed → People (name, context, action) → Next actions (Q1 first,
 never by clock) → cartoon or word search. Next actions talk to them

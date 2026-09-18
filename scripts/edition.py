@@ -620,6 +620,45 @@ def _clip_block(item, pt: bool) -> list[str]:
     return out
 
 
+def _clip_title(item) -> str:
+    if isinstance(item, dict):
+        return (item.get("title") or item.get("line") or item.get("text") or "").strip()
+    return str(item).strip()
+
+
+def day_board(extra: dict, pt: bool, limit: int = 3) -> list[str]:
+    """Compact Founder-style lanes. Empty lanes stay off the page."""
+    extra = extra or {}
+    lanes = [
+        ("handled", extra.get("handled") or extra.get("exceptions") or extra.get("changes") or [],
+         "Feito" if pt else "Handled"),
+        ("prepared", extra.get("prepared") or extra.get("focus") or [],
+         "Preparado" if pt else "Prepared"),
+        ("needs", extra.get("approvals") or extra.get("decisions") or extra.get("fires") or extra.get("needs") or [],
+         "Precisa de ti" if pt else "Needs you"),
+        ("watching", extra.get("watching") or extra.get("clips") or [],
+         "A acompanhar" if pt else "Watching"),
+    ]
+    blocks: list[str] = []
+    seen: list[str] = []
+    for _key, items, label in lanes:
+        bits = []
+        for item in items:
+            text = _clip_title(item) if _key == "watching" else _item_text(item)
+            text = re.sub(r"^Q[1-4]\s+", "", str(text or "").strip())
+            if not text or not unique_push(seen, text):
+                continue
+            bits.append(text)
+            if len(bits) >= limit:
+                break
+        if bits:
+            blocks.append(f"**{label}:** " + "; ".join(bits))
+    if not blocks:
+        return []
+    heading = "## " + ("O dia" if pt else "The day")
+    return [heading, *blocks, ""]
+
+
 def compose(state: dict, when: datetime, extra: dict | None = None) -> str:
     extra = extra or {}
     lang = (state.get("language") or "").lower()
@@ -634,6 +673,7 @@ def compose(state: dict, when: datetime, extra: dict | None = None) -> str:
     lines.append("## " + ("Hoje em uma frase" if pt else "Today in one sentence"))
     lines.append(f"> {kicker}")
     lines.append("")
+    lines.extend(day_board(extra, pt))
 
     meetings = extra.get("meetings") or []
     rows = agenda_rows(meetings, pt)
