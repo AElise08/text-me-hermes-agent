@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import argparse
 import accounts as accounts_mod  # noqa: E402
+import triggers as triggers_mod
 import fcntl
 import json
 import os
@@ -198,7 +199,12 @@ def add_slot(
     data.setdefault("slots", [])
     key = (_stamp_key(start_dt.isoformat()), text.casefold())
     rules = tuple(recurrence or [])
+    calendar_account, target_calendar = accounts_mod.route(account, calendar_id)
     for existing in list(data["slots"]) + list(data.get("blocks") or []):
+        if (existing.get("calendar_account", calendar_account), existing.get("calendar_id", target_calendar)) != (
+            calendar_account, target_calendar
+        ):
+            continue
         when = existing.get("start") or existing.get("when") or ""
         if (_stamp_key(str(when)), str(existing.get("text") or "").casefold()) == key:
             return {"skipped": "duplicate", "existing": existing}
@@ -218,12 +224,13 @@ def add_slot(
         "end": end_dt.isoformat(),
         "status": "open",
         "calendar": None,
+        "calendar_account": calendar_account,
+        "calendar_id": target_calendar,
     }
     if recurrence:
         item["recurrence"] = list(recurrence)
     if gcal_mod.token():
         try:
-            calendar_account, target_calendar = accounts_mod.route(account, calendar_id)
             created = gcal_mod.create(
                 text,
                 start_dt.isoformat(),
@@ -468,6 +475,18 @@ def parse() -> argparse.Namespace:
     day_p.add_argument("--calendar-id", default="")
     day_p.add_argument("--account", default="")
 
+    trigger = sub.add_parser("trigger")
+    trigger_sub = trigger.add_subparsers(dest="action", required=True)
+    trigger_add = trigger_sub.add_parser("add")
+    trigger_add.add_argument("--text", required=True)
+    condition = trigger_add.add_mutually_exclusive_group(required=True)
+    condition.add_argument("--at", default="")
+    condition.add_argument("--after-task", default="")
+    trigger_sub.add_parser("list")
+    trigger_sub.add_parser("check")
+    for action in ("done", "cancel"):
+        trigger_sub.add_parser(action).add_argument("id")
+
     edition = sub.add_parser("edition")
     edition.add_argument("--title", default="")
     edition.add_argument("--no-send", action="store_true")
@@ -486,6 +505,21 @@ def main() -> None:
     # lock even when a command returns early or raises SystemExit.
     state_lock = lock_state()
     data = load()
+
+    if args.cmd == "trigger":
+        if args.action == "add":
+            item = triggers_mod.add(data, args.text, args.at, args.after_task)
+            save(data)
+            dump({"created": item})
+        elif args.action in ("done", "cancel"):
+            item = find(data.get("triggers", []), args.id)
+            item["status"] = args.action
+            save(data)
+            dump({"updated": item})
+        else:
+            items = triggers_mod.ready(data, edition_mod.as_of()) if args.action == "check" else data.get("triggers", [])
+            dump({"triggers": items})
+        return
 
     if args.cmd == "goal":
         if args.action == "set":
@@ -797,11 +831,17 @@ def main() -> None:
         blob = args.text.casefold()
         if args.date:
             day = datetime.strptime(args.date, "%Y-%m-%d").replace(tzinfo=now.tzinfo)
-        elif re.search(r"\bamanh[ãa]\b", blob):
+        elif re.search(r"\b(amanh[ãa]|tomorrow)\b", blob):
             day = (now + timedelta(days=1)).replace(hour=0, minute=0, second=0, microsecond=0)
         else:
             day = now.replace(hour=0, minute=0, second=0, microsecond=0)
         planned = day_mod.parse(args.text, day)
+        existing = []
+        if gcal_mod.token():
+            try:
+                existing = gcal_mod.events_on(day, args.calendar_id, args.account)
+            except SystemExit:
+                existing = []
         created, skipped = [], []
         for item in planned:
             row = add_slot(
@@ -817,12 +857,6 @@ def main() -> None:
                 created.append(row["created"])
             else:
                 skipped.append(row)
-        existing = []
-        if gcal_mod.token():
-            try:
-                existing = gcal_mod.events_on(day, args.calendar_id, args.account)
-            except SystemExit:
-                existing = []
         clashes = day_mod.conflicts(planned, existing)
         save(data)
         dump(
@@ -938,6 +972,7 @@ def main() -> None:
                 },
             },
             "active_count": len(active),
+            "triggers": triggers_mod.ready(data, edition_mod.as_of()),
             "language": data["language"],
             "profile": data["profile"],
         }

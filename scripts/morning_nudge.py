@@ -32,9 +32,9 @@ if not skip:
             )
         elif delivery == "kindle":
             edition = (
-                " A edição do dia está no Kindle."
+                " A edição foi gerada, mas o envio ao Kindle não foi confirmado."
                 if lang.startswith("pt")
-                else " Today's edition is on your Kindle."
+                else " Today's edition was generated, but sending to Kindle was not confirmed."
             )
         elif delivery == "printer":
             edition = (
@@ -44,9 +44,9 @@ if not skip:
             )
         elif delivery == "email":
             edition = (
-                " A edição foi para o teu email."
+                " A edição foi gerada, mas o envio por email não foi confirmado."
                 if lang.startswith("pt")
-                else " Today's edition is in your email."
+                else " Today's edition was generated, but email sending was not confirmed."
             )
     except subprocess.CalledProcessError:
         pass
@@ -80,10 +80,13 @@ else:
         elif goals.get("life"):
             parts.append("Life: move " + goals["life"])
         msg = "Good morning. Today's focus: " + "; ".join(parts) + "."
-if delivery == "kindle" and "Kindle" not in msg and "Kindle" not in edition:
+if not skip and delivery == "kindle" and "Kindle" not in msg and "Kindle" not in edition:
     msg += (
-        " A edição do dia foi gerada pro Kindle — sincroniza no Wi-Fi antes de sair."
+        " Não consegui confirmar a edição para o Kindle."
         if pt
-        else " Today's edition is ready for your Kindle — it syncs over Wi-Fi."
+        else " I could not confirm today's Kindle edition."
     )
+reminders = data.get("triggers") or []
+if reminders:
+    msg += (" Lembretes: " if pt else " Reminders: ") + "; ".join(t["text"] for t in reminders)
 print(msg + edition)

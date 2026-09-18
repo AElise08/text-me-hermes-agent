@@ -143,6 +143,31 @@ use the saved default. If several accounts exist and no default has been chosen,
 ask before writing. Gmail is different: Plow currently uses its default mailbox
 only, so never imply a Gmail account switch works.
 
+## Conflict proposals and personal reminders
+
+`matriz.py day` returns conflicts with read-only `options` (move or shorten,
+when a same-day slot of at least 15 minutes is available). Explain the concrete
+times in the person's language, and ask which option they want. Never apply an
+option before their explicit yes/sim. If two options were offered, a bare yes
+is ambiguous: ask which one. Before applying, re-read the selected calendar,
+resolve the exact event ID/account/calendar, and check that the slot is still
+free. Use `gcal.py move --id ... --start ... --end ...` only after confirmation.
+Do not shorten fixed commitments or change an entire recurring series without
+clarifying scope. If no option is available, say so instead of inventing a slot.
+
+Save a personal reminder with `matriz.py trigger add --text "Send the paper"
+--after-task TASK_ID`, or `--at 2026-09-20T09:00:00-04:00`. Resolve dates in the
+person's timezone; ask about ambiguous numeric dates (03/04) rather than assuming
+US or Brazilian ordering. `trigger check` returns ready reminders; run it after
+marking a task done and during follow-ups. `trigger done ID` acknowledges a
+reminder; `trigger cancel ID` stops it. Pending reminders appear in the morning
+message and remain until acknowledged. These are morning/chat checks, not
+guaranteed exact-time alarms.
+
+Website registration monitoring and automatic detection of unanswered Gmail
+threads are not implemented. For those requests, explain the limit and offer
+a dated reminder to check, without claiming to monitor the website or thread.
+
 When they dump a day with clock times, that dump **is** the calendar. Whatever
 their day is — class, shift, clinic, gym, kids, a call — book **every**
 interval they named. Do **not** call `block start` for the one free window.

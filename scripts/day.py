@@ -299,6 +299,27 @@ def _stamp_min(item: dict) -> str:
     return when.strftime("%Y-%m-%dT%H:%M") if when else str(item.get("start") or "")[:16]
 
 
+def resolution_options(event: dict, busy: list[dict]) -> list[dict]:
+    """Read-only, same-day proposals. Never move a remote event here."""
+    start, end = _when(event.get("start")), _when(event.get("end"))
+    if not start or not end or end <= start:
+        return []
+    options = []
+    for kind in ("move", "shorten"):
+        candidate = start
+        while candidate.date() == start.date():
+            finish = candidate + (end - start) if kind == "move" else end
+            if finish.date() != start.date() or finish - candidate < timedelta(minutes=15):
+                break
+            proposal = {"start": candidate.isoformat(), "end": finish.isoformat()}
+            if not any(overlaps(proposal, other) for other in busy):
+                if candidate != start:
+                    options.append({"action": kind, **proposal, "requires_confirmation": True})
+                break
+            candidate += timedelta(minutes=5)
+    return options
+
+
 def conflicts(planned: list[dict], existing: list[dict] | None = None) -> list[dict]:
     """Overlaps inside the dump, or against events already on the calendar."""
     out: list[dict] = []
@@ -311,6 +332,8 @@ def conflicts(planned: list[dict], existing: list[dict] | None = None) -> list[d
                         "new": a.get("text") or "",
                         "existing": b.get("text") or "",
                         "kind": "dump",
+                        "target": a,
+                        "options": resolution_options(a, items[:i] + items[i + 1:] + list(existing or [])),
                     }
                 )
     for a in items:
@@ -331,6 +354,8 @@ def conflicts(planned: list[dict], existing: list[dict] | None = None) -> list[d
                     "new": a.get("text") or "",
                     "existing": other.get("text") or "",
                     "kind": "calendar",
+                    "target": a,
+                    "options": resolution_options(a, [item for item in items if item is not a] + list(existing or [])),
                 }
             )
     return out

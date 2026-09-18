@@ -682,6 +682,13 @@ def compose(state: dict, when: datetime, extra: dict | None = None) -> str:
         lines.extend(rows)
         lines.append("")
 
+    import triggers as triggers_mod
+    reminders = triggers_mod.ready(state, when)
+    if reminders:
+        lines.append("## " + ("Lembretes" if pt else "Reminders"))
+        lines.extend("- " + item["text"] for item in reminders)
+        lines.append("")
+
     decisions = extra.get("approvals") or extra.get("decisions") or []
     dec_lines = []
     for item in decisions:

@@ -67,9 +67,11 @@ Google: see `references/calendar.md`. Default is REST with the plow-agents
 account token — Latch is optional. That path reads Calendar, reads Gmail,
 and sends mail (EPUB → Kindle, PDF → printer email). Latch is not required.
 
-Kindle: `edition_hour` is **in their hand**. Mail 5 minutes earlier
-(6:00 → 5:55). If it landed, do not text the phone. Title is "Seu Reporte
-Diário — dd/mm", never a bare date and never mixed language; **dd/mm is today in their timezone**,
+Kindle: `edition_hour` is the desired reading time. Mail 5 minutes earlier
+(6:00 → 5:55); Amazon processing and Wi-Fi sync can delay receipt. A successful
+Gmail send is not proof of delivery to the device. Title is "Seu Reporte
+Diário — dd/mm" in Portuguese or "Your Daily Report — Mon DD" in English,
+never a bare date and never mixed language; the date is today in their timezone,
 never tomorrow and never a date in `--extra-file`. Do not reprint their
 routine on the page. The briefing order is: today in one sentence →
 O dia (Feito / Preparado / Precisa de ti / A acompanhar; skip empty) →

@@ -77,6 +77,31 @@ job template.
 
 ## Install
 
+### Conflict suggestions and personal reminders
+
+Calendar conflicts now include read-only move/shorten proposals when a suitable
+same-day slot exists. The agent asks which option to apply and rechecks the
+calendar before changing it. Suggestions cover the selected calendar and the
+submitted day, not an aggregated view of every connected calendar.
+
+Personal reminders can wait for a task to finish or a timezone-aware deadline:
+
+```sh
+python3 scripts/matriz.py trigger add --text "Send the paper" --after-task TASK_ID
+python3 scripts/matriz.py trigger add --text "Check registration" --at 2026-09-20T09:00:00-04:00
+python3 scripts/matriz.py trigger check
+python3 scripts/matriz.py trigger done REMINDER_ID
+```
+
+These reminders surface in morning messages or chat checks, not exact-time
+alarms. Website monitoring and automatic unanswered-email detection are not
+implemented; a reminder to check is not a claim that either was checked.
+
+Portuguese and English are supported, but calendar parsing is rule-based:
+ambiguous numeric dates need clarification. Sending an edition through Gmail
+does not prove it has synced to Kindle. Live delivery and conversational quality
+should be checked on the deployed line in both languages.
+
 You need Git, Docker Compose, and **Python 3.10+** (the helper scripts use
 3.10 syntax; the agent itself runs inside Docker).
 

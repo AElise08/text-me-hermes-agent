@@ -33,19 +33,28 @@ def configured_account(name: str = "") -> dict:
     wanted = name.strip().casefold()
     if not wanted:
         return {}
+    matches = []
     for row in settings()["accounts"]:
         account = str(row.get("account") or "").strip().casefold()
         label = str(row.get("label") or "").strip().casefold()
-        if wanted in (account, label):
+        if wanted == account:
             return row
-    return {}
+        if wanted == label:
+            matches.append(row)
+    if len(matches) > 1:
+        raise SystemExit("ambiguous account label; use the email address")
+    return matches[0] if matches else {}
 
 
 def route(account: str = "", calendar_id: str = "") -> tuple[str, str]:
     configured = settings()
     chosen = configured_account(account)
+    if account.strip() and not chosen and "@" not in account:
+        raise SystemExit("unknown account label; use a saved label or email address")
     address = str(chosen.get("account") or account or configured["default_account"]).strip().casefold()
-    calendar = calendar_id or chosen.get("calendar_id") or configured["default_calendar_id"]
+    calendar = calendar_id or chosen.get("calendar_id") or (
+        "primary" if account and address != configured["default_account"] else configured["default_calendar_id"]
+    )
     return (
         address,
         str(calendar).strip() or "primary",
@@ -67,7 +76,8 @@ def upsert(configured: dict, account: str, label: str, calendar_id: str = "prima
 
 
 def record(service: str, action: str, account: str = "", calendar_id: str = "", resource_id: str = "") -> None:
-    account, calendar_id = route(account, calendar_id)
+    if service == "calendar":
+        account, calendar_id = route(account, calendar_id)
     path = _audit_path()
     try:
         rows = json.loads(path.read_text(encoding="utf-8"))
