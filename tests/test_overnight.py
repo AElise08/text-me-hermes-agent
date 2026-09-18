@@ -1,4 +1,5 @@
 import importlib.util
+import sys
 import unittest
 from datetime import datetime
 from pathlib import Path
@@ -67,6 +68,77 @@ class OvernightApplyTests(unittest.TestCase):
             )
         self.assertEqual(report["applied"], [])
         self.assertEqual(report["approvals"][0]["text"], "podemos remarcar o vídeo pra 11?")
+
+    def test_later_integer_is_not_proposed_when(self):
+        cases = [
+            ("vídeo mudou para as 11h, sala 2", "a reunião do vídeo mudou para as 11h, sala 2", "2026-09-17T11:00"),
+            ("mudou para as 11h dia 17/09", "a reunião mudou para as 11h dia 17/09", "2026-09-17T11:00"),
+            ("passou para 14h no dia 18", "a reunião passou para 14h no dia 18", "2026-09-17T14:00"),
+            ("moved to 3pm in room 4", "the video moved to 3pm in room 4", "2026-09-17T15:00"),
+        ]
+        for subject, snippet, when in cases:
+            with self.subTest(subject=subject):
+                messages = [{"subject": subject, "snippet": snippet, "from": "Ana <ana@x>"}]
+                with patch.object(self.mod.gcal_mod, "move", lambda *a, **k: (_ for _ in ()).throw(AssertionError("no move"))):
+                    report = self.mod.run(
+                        apply=True,
+                        messages=messages,
+                        events=[dict(self.event)],
+                        now=self.now,
+                    )
+                self.assertEqual(report["applied"], [])
+                self.assertEqual(report["approvals"][0]["action"], "move")
+                self.assertTrue(report["approvals"][0]["proposed_when"].startswith(when), report["approvals"][0])
+
+    def test_url_query_does_not_drop_move_time(self):
+        messages = [
+            {
+                "subject": "vídeo mudou para as 11h",
+                "snippet": "https://x.com/a?b=1",
+                "from": "Ana <ana@x>",
+            }
+        ]
+        with patch.object(self.mod.gcal_mod, "move", lambda *a, **k: (_ for _ in ()).throw(AssertionError("no move"))):
+            report = self.mod.run(
+                apply=True,
+                messages=messages,
+                events=[dict(self.event)],
+                now=self.now,
+            )
+        self.assertEqual(report["applied"], [])
+        self.assertEqual(report["approvals"][0]["action"], "move")
+        self.assertTrue(report["approvals"][0]["proposed_when"].startswith("2026-09-17T11:00"))
+
+    def test_trailing_question_keeps_move_time(self):
+        messages = [
+            {
+                "subject": "vídeo mudou para as 11h?",
+                "snippet": "a reunião do vídeo mudou para as 11h?",
+                "from": "Ana <ana@x>",
+            }
+        ]
+        with patch.object(self.mod.gcal_mod, "move", lambda *a, **k: (_ for _ in ()).throw(AssertionError("no move"))):
+            report = self.mod.run(
+                apply=True,
+                messages=messages,
+                events=[dict(self.event)],
+                now=self.now,
+            )
+        self.assertEqual(report["applied"], [])
+        self.assertEqual(report["approvals"][0]["action"], "move")
+        self.assertTrue(report["approvals"][0]["proposed_when"].startswith("2026-09-17T11:00"))
+
+    def test_cli_does_not_apply_unless_flag(self):
+        with patch.object(self.mod, "run", return_value={}) as mocked:
+            with patch.object(sys, "argv", ["overnight.py"]):
+                with patch("builtins.print"):
+                    self.mod.main()
+            self.assertEqual(mocked.call_args.kwargs["apply"], False)
+        with patch.object(self.mod, "run", return_value={}) as mocked:
+            with patch.object(sys, "argv", ["overnight.py", "--apply"]):
+                with patch("builtins.print"):
+                    self.mod.main()
+            self.assertEqual(mocked.call_args.kwargs["apply"], True)
 
     def test_cancel_mail_is_approval_with_event(self):
         messages = [

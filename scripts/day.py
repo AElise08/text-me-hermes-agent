@@ -7,7 +7,8 @@ not pick one 'focus' block — this parser is the grid.
 from __future__ import annotations
 
 import re
-from datetime import date, datetime, timedelta
+from datetime import date, datetime, timedelta, timezone
+from zoneinfo import ZoneInfo
 
 HOUR = re.compile(
     r"\b(\d{1,2})(?:[:hH](\d{2}))?\s*(h|hrs?|horas?)?(?:\s*(da\s+(manh[ãa]|tarde|noite)|am|pm))?\b",
@@ -58,9 +59,6 @@ def _label(prefix: str) -> str:
     after = re.split(r"\d+(?:[:hH]\d{2})?\s*(?:h|hrs?)?", prefix or "")[-1]
     tokens = re.findall(r"[A-Za-zÀ-ÿ]{3,}", after)
     keep = [t for t in tokens if t.casefold() not in STOP]
-    if not keep:
-        tokens = re.findall(r"[A-Za-zÀ-ÿ]{3,}", prefix or "")
-        keep = [t for t in tokens if t.casefold() not in STOP]
     if not keep:
         return "Busy"
     return " ".join(keep[-2:]).strip().capitalize()
@@ -235,7 +233,7 @@ def parse(text: str, day: datetime) -> list[dict]:
     for start, end, label, rec in closed:
         if merged:
             prev_end = datetime.fromisoformat(merged[-1]["end"])
-            if start < prev_end and label.casefold() == merged[-1]["text"].casefold():
+            if start == prev_end and label.casefold() == merged[-1]["text"].casefold():
                 if end > prev_end:
                     merged[-1]["end"] = end.isoformat()
                 if rec and not merged[-1].get("recurrence"):
@@ -255,9 +253,12 @@ def _when(value: str) -> datetime | None:
     if "T" not in raw:
         return None
     try:
-        return datetime.fromisoformat(raw.replace("Z", "+00:00"))
+        when = datetime.fromisoformat(raw.replace("Z", "+00:00"))
     except ValueError:
         return None
+    if when.tzinfo is None:
+        when = when.replace(tzinfo=ZoneInfo("America/Sao_Paulo"))
+    return when
 
 
 def _all_day(value: str) -> date | None:
@@ -280,12 +281,14 @@ def overlaps(a: dict, b: dict) -> bool:
         start = _all_day(all_day.get("start") or "")
         end = _all_day(all_day.get("end") or "")
         timed_start, timed_end = _when(timed.get("start") or ""), _when(timed.get("end") or "")
-        if not all((start, end, timed_start, timed_end)):
+        if not start or not timed_start or not timed_end:
             return False
-        all_start = timed_start.replace(
-            year=start.year, month=start.month, day=start.day, hour=0, minute=0, second=0, microsecond=0
-        )
-        all_end = all_start + timedelta(days=(end - start).days)
+        local = ZoneInfo("America/Sao_Paulo")
+        all_start = datetime(start.year, start.month, start.day, tzinfo=local)
+        if end:
+            all_end = datetime(end.year, end.month, end.day, tzinfo=local)
+        else:
+            all_end = all_start + timedelta(days=1)
         return timed_start < all_end and all_start < timed_end
     a0, a1 = _when(a.get("start") or ""), _when(a.get("end") or "")
     b0, b1 = _when(b.get("start") or ""), _when(b.get("end") or "")
@@ -296,7 +299,9 @@ def overlaps(a: dict, b: dict) -> bool:
 
 def _stamp_min(item: dict) -> str:
     when = _when(item.get("start") or "")
-    return when.strftime("%Y-%m-%dT%H:%M") if when else str(item.get("start") or "")[:16]
+    if not when:
+        return str(item.get("start") or "")[:16]
+    return when.astimezone(timezone.utc).isoformat()
 
 
 def resolution_options(event: dict, busy: list[dict]) -> list[dict]:

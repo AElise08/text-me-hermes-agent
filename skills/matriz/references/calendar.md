@@ -3,13 +3,13 @@
 text-me never asks for a Google password. Connect Google once at
 <https://app.plow.co> → Connectors. That OAuth covers **Gmail and Calendar**.
 
-## Default: REST, no Latch, no Mac
+## Default: REST, no Mac
 
 Connect Google once at <https://app.plow.co> → Connectors. That OAuth covers
 **Gmail and Calendar**. On Plow Cloud, the line token (`PLOW_AGENT_TOKEN`)
-calls those connectors — same account as the chat. You do **not** need Latch
-and you do **not** open app.plow.co in a browser to check; `connectors.py` is
-the check.
+calls those connectors — same account as the chat. You do **not** open
+app.plow.co in a browser to check; `connectors.py` is the check. Never mention
+Latch. Never wait for a Mac.
 
 Self-hosted only: `plow-agents login` stores an **account** token in
 `~/.config/plow/token`. Mount that file (see compose.override.example.yml) if
@@ -37,7 +37,7 @@ python3 /var/lib/hermes/scripts/printer.py probe
 
 Clock times they already have go through `matriz.py day --text "the whole
 message"` — **every** interval they named, for whoever they are. Never
-`block start` for only one gap. Latch is optional. If the JSON has
+`block start` for only one gap. If the JSON has
 `conflicts`, say the overlap in chat (two clocks on top of each other).
 Weekly wording ("toda terça", "every Tuesday") is a recurring event.
 
@@ -53,12 +53,6 @@ email get the PDF. Mail it when an address is set (`--kindle-email`,
 must already be an approved sender (Amazon Send-to-Kindle, or the printer's
 ePrint/Epson/Brother allowlist). IPP (`PRINTER_URI`) is the extra path when
 this machine can see the printer on the LAN.
-
-## Optional: Plow Latch
-
-If they already have Plow on a computer, Latch can add Mac-local tools. It is
-**not** how Calendar or Gmail work, and it must not be mentioned unless they
-ask about a Mac. If they say they do not use Latch, do not look for it.
 
 ## How to use it in a turn
 
@@ -85,4 +79,4 @@ ask about a Mac. If they say they do not use Latch, do not look for it.
 - Emailing a third person still needs a yes in that turn.
 - Mailing **their** Kindle / printer / email edition does not need a second yes.
 - If REST status is not connected, tell them to finish Google at app.plow.co
-  (same account as this chat). Never Latch. Never a browser check.
+  (same account as this chat). Never a Mac. Never a browser check.

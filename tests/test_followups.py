@@ -69,3 +69,56 @@ class FollowupTests(unittest.TestCase):
                 result = subprocess.check_output([sys.executable, str(SCRIPTS / "matriz.py"), "day", "--text", text], env=env, text=True)
                 results.append(json.loads(result)["date"])
             self.assertEqual(results[0], results[1])
+
+    def test_overlaps_naive_local_against_offset_stamp(self):
+        self.assertTrue(
+            day.overlaps(
+                {"start": "2026-09-20T09:00:00", "end": "2026-09-20T10:00:00"},
+                {"start": "2026-09-20T09:30:00-03:00", "end": "2026-09-20T10:30:00-03:00"},
+            )
+        )
+
+    def test_dump_keeps_overlapping_same_title_as_conflict(self):
+        when = datetime(2026, 9, 17)
+        pt = day.parse("aula das 8h às 10h e aula das 9h às 11h", when)
+        self.assertEqual([row["text"] for row in pt], ["Aula", "Aula"])
+        self.assertTrue(day.conflicts(pt))
+        unlabeled = day.parse("das 8h às 10h e das 9h às 11h", when)
+        self.assertTrue(all(row["text"] == "Busy" for row in unlabeled))
+        self.assertTrue(day.conflicts(unlabeled))
+        en = day.parse("Gym from 9 to 11 and gym from 10 to 12", when)
+        self.assertEqual([row["text"] for row in en], ["Gym", "Gym"])
+        self.assertTrue(day.conflicts(en))
+
+    def test_calendar_duplicate_compares_utc_instant_not_wall_clock(self):
+        planned = [
+            {
+                "text": "Aula",
+                "start": "2026-09-20T09:00:00-03:00",
+                "end": "2026-09-20T15:00:00-03:00",
+            }
+        ]
+        same_instant = [
+            {"summary": "Aula", "start": "2026-09-20T12:00:00Z", "end": "2026-09-20T18:00:00Z"}
+        ]
+        self.assertEqual(day.conflicts(planned, same_instant), [])
+        same_wall = [
+            {"summary": "Aula", "start": "2026-09-20T09:00:00Z", "end": "2026-09-20T15:00:00Z"}
+        ]
+        clashes = day.conflicts(planned, same_wall)
+        self.assertEqual(len(clashes), 1)
+        self.assertEqual(clashes[0]["kind"], "calendar")
+
+    def test_all_day_bounds_use_sao_paulo_and_missing_end_is_next_day(self):
+        local = {
+            "start": "2026-09-17T09:00:00-03:00",
+            "end": "2026-09-17T10:00:00-03:00",
+        }
+        utc_early = {
+            "start": "2026-09-17T00:30:00+00:00",
+            "end": "2026-09-17T01:00:00+00:00",
+        }
+        spanned = {"start": "2026-09-17", "end": "2026-09-18"}
+        self.assertTrue(day.overlaps(local, spanned))
+        self.assertFalse(day.overlaps(utc_early, spanned))
+        self.assertTrue(day.overlaps(local, {"start": "2026-09-17"}))

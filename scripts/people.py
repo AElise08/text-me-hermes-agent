@@ -6,6 +6,16 @@ import re
 import unicodedata
 
 EMAIL = re.compile(r"[A-Z0-9._%+\-]+@[A-Z0-9.\-]+\.[A-Z]{2,}", re.I)
+STOP = {
+    "com", "para", "pra", "with", "from", "and", "the",
+    "de", "da", "do", "das", "dos", "em", "no", "na", "por", "for",
+    "call", "reuniao", "trip",
+    "janeiro", "fevereiro", "marco", "abril", "maio", "junho",
+    "julho", "agosto", "setembro", "outubro", "novembro", "dezembro",
+    "monday", "tuesday", "wednesday", "thursday", "friday", "saturday", "sunday",
+    "segunda", "terca", "quarta", "quinta", "sexta", "sabado", "domingo",
+    "gym", "aula", "rio", "max",
+}
 
 
 def fold(text: str) -> str:
@@ -16,6 +26,56 @@ def fold(text: str) -> str:
         .casefold()
         .strip()
     )
+
+
+def _plain(text: str) -> str:
+    return " ".join(fold(text).split())
+
+
+def _word_in(blob: str, token: str) -> bool:
+    return bool(token) and bool(
+        re.search(rf"(?<![a-z0-9]){re.escape(token)}(?![a-z0-9])", blob)
+    )
+
+
+def _name_matches(query: str, raw: str) -> bool:
+    name = _plain(raw)
+    if not name:
+        return False
+    if query == name:
+        return True
+    parts = name.split()
+    return len(parts) >= 2 and query == parts[0]
+
+
+def _email_matches(query: str, email: str) -> bool:
+    addr = (email or "").strip().casefold()
+    if not addr or len(query) < 3:
+        return False
+    if query == addr:
+        return True
+    local = addr.split("@", 1)[0]
+    q_local = query.split("@", 1)[0] if "@" in query else query
+    if len(q_local) < 3:
+        return False
+    if q_local == local:
+        return True
+    bits = [b for b in re.split(r"[._+\-]+", local) if b]
+    return q_local in bits
+
+
+def _mentioned(token: str, blob: str) -> bool:
+    if len(token) < 3:
+        return False
+    parts = token.split()
+    if len(parts) >= 2:
+        if _word_in(blob, token):
+            return True
+        first = parts[0]
+        return len(first) >= 3 and first not in STOP and _word_in(blob, first)
+    if token in STOP:
+        return bool(re.search(rf"(?<![a-z0-9])@{re.escape(token)}(?![a-z0-9])", blob))
+    return _word_in(blob, token)
 
 
 def emails_in(text: str) -> list[str]:
@@ -54,16 +114,16 @@ def upsert(people: list, name: str, email: str = "", alias: str = "") -> dict:
 
 
 def find(people: list, query: str) -> list[dict]:
-    q = fold(query)
+    q = _plain(query)
     if not q:
         return []
     hits = []
     for person in people:
         names = [person.get("name") or "", *(person.get("aliases") or [])]
-        if any(q == fold(n) or (len(q) >= 3 and q in fold(n)) for n in names if n):
+        if any(_name_matches(q, n) for n in names if n):
             hits.append(person)
             continue
-        if q in (person.get("email") or "").casefold():
+        if _email_matches(q, person.get("email") or ""):
             hits.append(person)
     return hits
 
@@ -71,17 +131,12 @@ def find(people: list, query: str) -> list[dict]:
 def emails_for(text: str, people: list | None) -> list[str]:
     """Emails they typed, plus saved people whose name appears as a word."""
     found = emails_in(text)
-    blob = fold(text)
+    blob = _plain(text)
     for person in people or []:
         email = (person.get("email") or "").strip().casefold()
         if not email or email in found:
             continue
         names = [person.get("name") or "", *(person.get("aliases") or [])]
-        for raw in names:
-            token = fold(raw)
-            if len(token) < 3:
-                continue
-            if re.search(rf"(?<![a-z0-9]){re.escape(token)}(?![a-z0-9])", blob):
-                found.append(email)
-                break
+        if any(_mentioned(_plain(raw), blob) for raw in names if raw):
+            found.append(email)
     return found

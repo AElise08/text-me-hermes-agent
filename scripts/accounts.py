@@ -52,13 +52,16 @@ def route(account: str = "", calendar_id: str = "") -> tuple[str, str]:
     if account.strip() and not chosen and "@" not in account:
         raise SystemExit("unknown account label; use a saved label or email address")
     address = str(chosen.get("account") or account or configured["default_account"]).strip().casefold()
-    calendar = calendar_id or chosen.get("calendar_id") or (
-        "primary" if account and address != configured["default_account"] else configured["default_calendar_id"]
-    )
-    return (
-        address,
-        str(calendar).strip() or "primary",
-    )
+    explicit = calendar_id.strip()
+    if explicit:
+        calendar = explicit
+    elif not account.strip() or address == configured["default_account"]:
+        calendar = configured["default_calendar_id"]
+    elif chosen:
+        calendar = chosen.get("calendar_id") or "primary"
+    else:
+        calendar = "primary"
+    return address, str(calendar).strip() or "primary"
 
 
 def upsert(configured: dict, account: str, label: str, calendar_id: str = "primary") -> dict:

@@ -416,7 +416,7 @@ def parse() -> argparse.Namespace:
     add_google.add_argument("--calendar-id", default="primary")
     set_google = google_sub.add_parser("default")
     set_google.add_argument("--account", required=True)
-    set_google.add_argument("--calendar-id", default="primary")
+    set_google.add_argument("--calendar-id", default="")
     google_sub.add_parser("show")
     audit_google = google_sub.add_parser("audit")
     audit_google.add_argument("--account", default="")
@@ -656,8 +656,13 @@ def main() -> None:
             account = str(chosen.get("account") or args.account).strip().casefold()
             if not any(row.get("account") == account for row in google.get("accounts") or []):
                 raise SystemExit("add the Google account before making it the default")
+            calendar = args.calendar_id.strip() or str(chosen.get("calendar_id") or "primary")
             google["default_account"] = account
-            google["default_calendar_id"] = args.calendar_id.strip() or "primary"
+            google["default_calendar_id"] = calendar
+            for row in google.get("accounts") or []:
+                if str(row.get("account") or "").strip().casefold() == account:
+                    row["calendar_id"] = calendar
+                    break
             save(data)
         if args.action == "audit":
             chosen = accounts_mod.configured_account(args.account)

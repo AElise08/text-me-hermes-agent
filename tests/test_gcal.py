@@ -1,6 +1,7 @@
 import json
 import os
 import unittest
+from datetime import datetime
 from unittest.mock import patch
 from pathlib import Path
 import importlib.util
@@ -53,6 +54,14 @@ class GcalTests(unittest.TestCase):
         }
         with patch.dict(os.environ, env, clear=True):
             self.assertEqual(gcal.token(), "")
+
+    def test_payload_omits_empty_account(self):
+        gcal = load_gcal()
+        self.assertNotIn("account", gcal._payload({"calendar_id": "primary", "account": ""}))
+        self.assertEqual(
+            gcal._payload({"account": "me@x.com", "calendar_id": "primary"})["account"],
+            "me@x.com",
+        )
 
     def test_create_posts_summary_start_end(self):
         gcal = load_gcal()
@@ -257,3 +266,33 @@ class GcalTests(unittest.TestCase):
     def test_emails_in_dedupes(self):
         gcal = load_gcal()
         self.assertEqual(gcal.emails_in("Ana <Ana@X.com> e ana@x.com"), ["ana@x.com"])
+
+    def test_events_on_applies_event_timezone_to_naive_datetime(self):
+        gcal = load_gcal()
+
+        def fake_call(action, body=None, method=None):
+            return {
+                "data": {
+                    "items": [
+                        {
+                            "id": "evt1",
+                            "summary": "Aula",
+                            "start": {
+                                "dateTime": "2026-09-20T09:00:00",
+                                "timeZone": "America/Sao_Paulo",
+                            },
+                            "end": {
+                                "dateTime": "2026-09-20T10:00:00",
+                                "timeZone": "America/Sao_Paulo",
+                            },
+                        }
+                    ]
+                }
+            }
+
+        with patch.object(gcal, "call", fake_call), patch.object(
+            gcal.accounts_mod, "route", return_value=("me@example.com", "primary")
+        ):
+            events = gcal.events_on(datetime(2026, 9, 20))
+        self.assertEqual(events[0]["start"], "2026-09-20T09:00:00-03:00")
+        self.assertEqual(events[0]["end"], "2026-09-20T10:00:00-03:00")

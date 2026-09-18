@@ -305,6 +305,21 @@ def agenda_rows(meetings: list, pt: bool) -> list[str]:
             parsed.append((None, None, line))
             continue
         parsed.append((match.group(1), match.group(2), match.group(3).strip()))
+    clash = set()
+    timed = []
+    for i, (start, end, _title) in enumerate(parsed):
+        if not start or not end:
+            continue
+        a0, a1 = _mins(start), _mins(end)
+        if a0 is None or a1 is None:
+            continue
+        timed.append((i, a0, a1))
+    timed.sort(key=lambda row: (row[1], row[2]))
+    for ai, (i, a0, a1) in enumerate(timed):
+        for j, b0, b1 in timed[ai + 1 :]:
+            if a0 < b1 and b0 < a1:
+                clash.add(i)
+                clash.add(j)
     out = []
     for i, (start, end, title) in enumerate(parsed):
         tags = []
@@ -313,12 +328,9 @@ def agenda_rows(meetings: list, pt: bool) -> list[str]:
             tags.append("deslocamento" if pt else "commute")
         if any(w in blob for w in ("estud", "prepar", "ensaio", "revis")):
             tags.append("preparo" if pt else "prep")
+        if i in clash:
+            tags.append("conflito" if pt else "conflict")
         if start and end:
-            a0, a1 = _mins(start), _mins(end)
-            if i + 1 < len(parsed) and parsed[i + 1][0]:
-                b0 = _mins(parsed[i + 1][0])
-                if a1 is not None and b0 is not None and b0 < a1:
-                    tags.append("conflito" if pt else "conflict")
             stamp = f"{start}–{end}"
             extra = f"  · {', '.join(tags)}" if tags else ""
             out.append(f"- {stamp}  {title}{extra}")

@@ -58,14 +58,14 @@ Clock times they already have go through **one** `matriz.py day --text "..."` �
 their full message, every interval, whoever they are. Weekly dumps ("toda
 terça", "every Tuesday") land as recurring Google events. If `conflicts` is
 set, tell them the overlap in chat; still keep what they named. Never
-`block start` for only the gap. Latch is optional; REST is enough. Focus blocks you invent still
+`block start` for only the gap. REST is enough. Focus blocks you invent still
 need "ok" / "tá bom" / "sim", then `block start`.
 Extensions ("mais 20") are how duration is learned. `block close` writes the
 sample. Next `duration suggest` uses the median actual, not the guess.
 
-Google: see `references/calendar.md`. Default is REST with the plow-agents
-account token — Latch is optional. That path reads Calendar, reads Gmail,
-and sends mail (EPUB → Kindle, PDF → printer email). Latch is not required.
+Google: see `references/calendar.md`. Default is REST. That path reads
+Calendar, reads Gmail, and sends mail (EPUB → Kindle, PDF → printer email).
+Never mention Latch. Never wait for a Mac.
 
 Kindle: `edition_hour` is the desired reading time. Mail 5 minutes earlier
 (6:00 → 5:55); Amazon processing and Wi-Fi sync can delay receipt. A successful

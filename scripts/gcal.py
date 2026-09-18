@@ -69,6 +69,14 @@ def base() -> str:
     return (env("PLOW_API_BASE") or "https://api.plow.co").rstrip("/")
 
 
+def _payload(body: dict | None) -> dict:
+    """Drop empty account so Plow uses the connected default (zero-setup)."""
+    out = dict(body or {})
+    if not str(out.get("account") or "").strip():
+        out.pop("account", None)
+    return out
+
+
 def call(action: str, body: dict | None = None, method: str | None = None) -> dict:
     tok = token()
     if not tok:
@@ -80,7 +88,7 @@ def call(action: str, body: dict | None = None, method: str | None = None) -> di
     headers = {"Authorization": f"Bearer {tok}", "Accept": "application/json"}
     data = None
     if verb == "POST":
-        data = json.dumps(body or {}).encode()
+        data = json.dumps(_payload(body)).encode()
         headers["Content-Type"] = "application/json"
     request = urllib.request.Request(url, data=data, headers=headers, method=verb)
     try:
@@ -116,6 +124,29 @@ def day_window(when: datetime | None = None) -> tuple[str, str]:
     return start.isoformat(), end.isoformat()
 
 
+def _event_stamp(raw, fallback: ZoneInfo) -> str:
+    if not isinstance(raw, dict):
+        return str(raw or "")
+    stamp = raw.get("dateTime") or raw.get("date_time") or raw.get("date") or ""
+    if not stamp:
+        return ""
+    text = str(stamp)
+    if "T" not in text:
+        return text
+    try:
+        when = datetime.fromisoformat(text.replace("Z", "+00:00"))
+    except ValueError:
+        return text
+    if when.tzinfo is None:
+        name = str(raw.get("timeZone") or raw.get("time_zone") or "").strip()
+        try:
+            tz = ZoneInfo(name) if name else fallback
+        except Exception:
+            tz = fallback
+        when = when.replace(tzinfo=tz)
+    return when.isoformat()
+
+
 def events_on(when: datetime | None = None, calendar_id: str = "", account: str = "") -> list[dict]:
     time_min, time_max = day_window(when)
     account, calendar_id = accounts_mod.route(account, calendar_id)
@@ -136,14 +167,11 @@ def events_on(when: datetime | None = None, calendar_id: str = "", account: str 
         items = data
     else:
         items = []
+    local = zone()
     out = []
     for item in items:
-        start = item.get("start") or {}
-        if isinstance(start, dict):
-            start = start.get("dateTime") or start.get("date_time") or start.get("date") or ""
-        end = item.get("end") or {}
-        if isinstance(end, dict):
-            end = end.get("dateTime") or end.get("date_time") or end.get("date") or ""
+        start = _event_stamp(item.get("start") or {}, local)
+        end = _event_stamp(item.get("end") or {}, local)
         out.append(
             {
                 "id": item.get("id"),

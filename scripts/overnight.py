@@ -30,7 +30,7 @@ STOP = {
     "updated", "invitation", "convite", "email", "mensagem",
 }
 ASK = re.compile(
-    r"(\?|\bpodemos\b|\bpode\b|\bconsegues?\b|\bcan we\b|\bcould we\b|\bwould you\b|\bok if\b)",
+    r"(\bpodemos\b|\bpode\b|\bconsegues?\b|\bcan we\b|\bcould we\b|\bwould you\b|\bok if\b)",
     re.I,
 )
 MOVED = re.compile(
@@ -38,10 +38,17 @@ MOVED = re.compile(
     re.I,
 )
 CANCEL = re.compile(r"\b(cancelou|cancelad[oa]|canceled|cancelled)\b", re.I)
+# A time is only a time with a real marker: :mm, trailing h/hrs/am/pm, or
+# às/as/at immediately before the hour. Bare integers (room 2, day 18) are not.
 TIME = re.compile(
-    r"\b(?:às?|as|at|pra|para as|para às)?\s*(\d{1,2})(?:[:hH](\d{2}))?\s*(h|hrs?|am|pm)?\b",
+    r"(?:(?P<pre>\b(?:às?|as|at)\s+)|\b)"
+    r"(?P<hour>\d{1,2})"
+    r"(?:[:hH](?P<minute>\d{2}))?"
+    r"\s*(?P<suffix>h|hrs?|am|pm)?"
+    r"\b",
     re.I,
 )
+DATE = re.compile(r"\b\d{4}-\d{1,2}-\d{1,2}\b|\b\d{1,2}/\d{1,2}(?:/\d{2,4})?\b")
 WAITING = re.compile(
     r"\b(re:|fwd:|urgente|prazo|deadline|esperando|waiting|responda|please reply)\b",
     re.I,
@@ -77,10 +84,13 @@ def _blob(msg: dict) -> str:
 
 def _parse_time(text: str, day: datetime) -> datetime | None:
     hits = []
-    for match in TIME.finditer(text or ""):
-        hour = int(match.group(1))
-        minute = int(match.group(2) or 0)
-        suffix = (match.group(3) or "").lower()
+    blob = DATE.sub(" ", text or "")
+    for match in TIME.finditer(blob):
+        if not (match.group("pre") or match.group("minute") or match.group("suffix")):
+            continue
+        hour = int(match.group("hour"))
+        minute = int(match.group("minute") or 0)
+        suffix = (match.group("suffix") or "").lower()
         if suffix == "pm" and hour < 12:
             hour += 12
         if suffix == "am" and hour == 12:
@@ -200,8 +210,6 @@ def classify(msg: dict, events: list[dict], day: datetime, spheres: dict | None 
             "sphere": sphere or "life",
             "why": "pay",
         }
-    if ASK.search(blob):
-        return {**base, "kind": "approval", "important": True, "event": event}
     when = _parse_time(blob, day)
     if CANCEL.search(blob) and not when:
         return {
@@ -233,6 +241,8 @@ def classify(msg: dict, events: list[dict], day: datetime, spheres: dict | None 
             "action": "cancel" if CANCEL.search(blob) else "move",
             "event": event,
         }
+    if ASK.search(blob):
+        return {**base, "kind": "approval", "important": True, "event": event}
     waiting = WAITING.search(blob) or any(k in blob.lower() for k in ("re:", "fwd:"))
     if waiting and (sphere or lane in ("reading", "hobby")):
         return {
@@ -288,7 +298,7 @@ def apply_cancel(event: dict) -> dict:
 
 def run(
     avoid: list[str] | None = None,
-    apply: bool = True,
+    apply: bool = False,
     messages: list[dict] | None = None,
     events: list[dict] | None = None,
     now: datetime | None = None,
@@ -344,12 +354,7 @@ def run(
             except (SystemExit, KeyError) as exc:
                 approvals.append({**row, "reason": str(exc)})
         elif item["kind"] == "move":
-            applied.append(
-                {
-                    "text": f"{item['event'].get('summary')} → {item['when'].strftime('%H:%M')}",
-                    "sphere": row["sphere"],
-                }
-            )
+            approvals.append(row)
         elif item["kind"] == "approval":
             approvals.append(row)
         elif item["kind"] == "need":
@@ -404,9 +409,9 @@ def lines(report: dict, pt: bool = False) -> list[str]:
 
 def main() -> int:
     parser = argparse.ArgumentParser(description="Apply overnight mail to calendar / list approvals.")
-    parser.add_argument("--no-apply", action="store_true")
+    parser.add_argument("--apply", action="store_true")
     args = parser.parse_args()
-    print(json.dumps(run(apply=not args.no_apply), ensure_ascii=False, default=str))
+    print(json.dumps(run(apply=args.apply), ensure_ascii=False, default=str))
     return 0
 
 
