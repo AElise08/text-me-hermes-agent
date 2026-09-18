@@ -202,16 +202,22 @@ class GcalTests(unittest.TestCase):
     def test_invite_existing_event(self):
         gcal = load_gcal()
         captured = {}
+        calls = []
 
         def fake_call(action, body=None, method=None):
+            calls.append((action, body))
             captured["action"] = action
             captured["body"] = body
+            if action == "calendar.events.get":
+                return {"status": "ok", "data": {"id": "evt1", "attendees": []}}
             return {"status": "ok", "data": {"hangoutLink": "https://meet.google.com/aaa-bbbb-ccc"}}
 
-        with patch.object(gcal, "call", fake_call), patch.object(gcal, "events_on", lambda when=None: []):
+        with patch.object(gcal, "call", fake_call):
             out = gcal.invite("evt1", ["ana@x.com"], meet=True)
         self.assertEqual(captured["action"], "calendar.events.update")
         self.assertEqual(captured["body"]["attendees"], [{"email": "ana@x.com"}])
+        self.assertEqual(calls[0][0], "calendar.events.get")
+        self.assertEqual(calls[0][1]["event_id"], "evt1")
         self.assertEqual(out["hangout"], "https://meet.google.com/aaa-bbbb-ccc")
 
     def test_invite_keeps_existing_attendees(self):
@@ -220,12 +226,11 @@ class GcalTests(unittest.TestCase):
 
         def fake_call(action, body=None, method=None):
             captured["body"] = body
+            if action == "calendar.events.get":
+                return {"status": "ok", "data": {"id": "evt1", "attendees": [{"email": "joao@x.com"}]}}
             return {"status": "ok", "data": {}}
 
-        def fake_events(when=None):
-            return [{"id": "evt1", "attendees": ["joao@x.com"]}]
-
-        with patch.object(gcal, "call", fake_call), patch.object(gcal, "events_on", fake_events):
+        with patch.object(gcal, "call", fake_call):
             gcal.invite("evt1", ["ana@x.com"])
         mails = [p["email"] for p in captured["body"]["attendees"]]
         self.assertEqual(mails, ["ana@x.com", "joao@x.com"])

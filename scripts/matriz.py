@@ -192,9 +192,18 @@ def add_slot(
         raise SystemExit("end must be after start")
     data.setdefault("slots", [])
     key = (_stamp_key(start_dt.isoformat()), text.casefold())
+    rules = tuple(recurrence or [])
     for existing in list(data["slots"]) + list(data.get("blocks") or []):
         when = existing.get("start") or existing.get("when") or ""
         if (_stamp_key(str(when)), str(existing.get("text") or "").casefold()) == key:
+            return {"skipped": "duplicate", "existing": existing}
+        if not rules or tuple(existing.get("recurrence") or []) != rules:
+            continue
+        try:
+            same_duration = _aware(existing.get("end") or "") - _aware(str(when)) == end_dt - start_dt
+        except ValueError:
+            same_duration = False
+        if same_duration and str(existing.get("text") or "").casefold() == text.casefold():
             return {"skipped": "duplicate", "existing": existing}
     item = {
         "id": new_id(),

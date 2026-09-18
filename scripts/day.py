@@ -7,7 +7,7 @@ not pick one 'focus' block — this parser is the grid.
 from __future__ import annotations
 
 import re
-from datetime import datetime, timedelta
+from datetime import date, datetime, timedelta
 
 HOUR = re.compile(
     r"\b(\d{1,2})(?:[:hH](\d{2}))?\s*(h|hrs?|horas?)?(?:\s*(da\s+(manh[ãa]|tarde|noite)|am|pm))?\b",
@@ -145,8 +145,25 @@ def snap_week(start: datetime, end: datetime, codes: list[str]) -> tuple[datetim
     return start, end
 
 
-def _window(text: str, start: int, end: int) -> str:
-    return text[max(0, start - 60) : min(len(text), end + 40)]
+_RECURRENCE_BREAK = re.compile(
+    r"\s+(?:e|and)\s+(?=(?:(?:a|o|the)\s+)?[A-Za-zÀ-ÿ]{3,}(?:\s+[A-Za-zÀ-ÿ]{3,}){0,3}\s+(?:tod[oa]s?|every|each)\b)",
+    re.I,
+)
+
+
+def _recurrence_window(text: str, start: int, end: int) -> str:
+    """Keep a routine's weekday with its own interval, not the next routine."""
+    left = max(0, start - 60)
+    around = text[left : min(len(text), end + 40)]
+    current_start, current_end = start - left, end - left
+    before, after = 0, len(around)
+    for boundary in _RECURRENCE_BREAK.finditer(around):
+        if boundary.end() <= current_start:
+            before = boundary.end()
+        elif boundary.end() > current_end:
+            after = boundary.start()
+            break
+    return around[before:after]
 
 
 def parse(text: str, day: datetime) -> list[dict]:
@@ -165,7 +182,7 @@ def parse(text: str, day: datetime) -> list[dict]:
             end = _at(day, int(match.group(4)), int(match.group(5) or 0), "tarde", start)
         if end <= start:
             end = start + timedelta(minutes=60)
-        around = _window(text, match.start(), match.end())
+        around = _recurrence_window(text, match.start(), match.end())
         rec = recurrence_for(around)
         if rec:
             codes = weekday_codes(around)
@@ -180,7 +197,7 @@ def parse(text: str, day: datetime) -> list[dict]:
         prefix = text[max(0, match.start() - 12) : match.start()]
         if re.search(r"(?:at[eé]|until|till)\s+(?:umas?\s+)?$", prefix, re.I):
             continue
-        around = _window(text, match.start(), match.end())
+        around = _recurrence_window(text, match.start(), match.end())
         if not re.search(r"[A-Za-zÀ-ÿ]{3,}", around):
             continue
         period = match.group(4) or ""
@@ -243,7 +260,33 @@ def _when(value: str) -> datetime | None:
         return None
 
 
+def _all_day(value: str) -> date | None:
+    raw = str(value or "")
+    if "T" in raw:
+        return None
+    try:
+        return date.fromisoformat(raw)
+    except ValueError:
+        return None
+
+
 def overlaps(a: dict, b: dict) -> bool:
+    a_day, b_day = _all_day(a.get("start") or ""), _all_day(b.get("start") or "")
+    if a_day and b_day:
+        a_end, b_end = _all_day(a.get("end") or ""), _all_day(b.get("end") or "")
+        return bool(a_end and b_end and a_day < b_end and b_day < a_end)
+    if a_day or b_day:
+        all_day, timed = (a, b) if a_day else (b, a)
+        start = _all_day(all_day.get("start") or "")
+        end = _all_day(all_day.get("end") or "")
+        timed_start, timed_end = _when(timed.get("start") or ""), _when(timed.get("end") or "")
+        if not all((start, end, timed_start, timed_end)):
+            return False
+        all_start = timed_start.replace(
+            year=start.year, month=start.month, day=start.day, hour=0, minute=0, second=0, microsecond=0
+        )
+        all_end = all_start + timedelta(days=(end - start).days)
+        return timed_start < all_end and all_start < timed_end
     a0, a1 = _when(a.get("start") or ""), _when(a.get("end") or "")
     b0, b1 = _when(b.get("start") or ""), _when(b.get("end") or "")
     if not all((a0, a1, b0, b1)):

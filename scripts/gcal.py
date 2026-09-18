@@ -177,6 +177,24 @@ def events_today() -> list[dict]:
     return events_on()
 
 
+def event_by_id(event_id: str, calendar_id: str = "primary", account: str = "") -> dict:
+    payload = call(
+        "calendar.events.get",
+        {"event_id": event_id, "calendar_id": calendar_id or "primary", "account": account or ""},
+    )
+    item = payload.get("data") if isinstance(payload.get("data"), dict) else payload
+    if not isinstance(item, dict) or not item.get("id"):
+        raise SystemExit("could not retrieve event details")
+    return {
+        "id": item["id"],
+        "attendees": [
+            (person.get("email") or "").strip()
+            for person in (item.get("attendees") or [])
+            if isinstance(person, dict) and (person.get("email") or "").strip()
+        ],
+    }
+
+
 EMAIL = re.compile(r"[A-Z0-9._%+\-]+@[A-Z0-9.\-]+\.[A-Z]{2,}", re.I)
 
 
@@ -346,17 +364,13 @@ def invite(
     people = [addr for addr in attendees if addr]
     if not people:
         raise SystemExit("invite needs at least one email")
-    try:
-        found = next((item for item in events_on(when) if item.get("id") == event_id), None)
-    except SystemExit:
-        found = None
-    if found:
-        have = {addr.casefold() for addr in people}
-        for addr in found.get("attendees") or []:
-            mail = (addr or "").strip().casefold()
-            if mail and mail not in have:
-                people.append(mail)
-                have.add(mail)
+    found = event_by_id(event_id, calendar_id, account)
+    have = {addr.casefold() for addr in people}
+    for addr in found["attendees"]:
+        mail = addr.casefold()
+        if mail not in have:
+            people.append(mail)
+            have.add(mail)
     fields: dict = _notify({"attendees": [{"email": addr} for addr in people]})
     if meet:
         conference = _conference()

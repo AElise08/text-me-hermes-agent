@@ -310,6 +310,29 @@ class MatrixTests(unittest.TestCase):
         self.assertTrue(slots[0]["start"].startswith("2026-09-22T07:30"))
         self.assertEqual(slots[0]["recurrence"], ["RRULE:FREQ=WEEKLY;BYDAY=TU"])
 
+    def test_weekly_routines_keep_their_own_weekdays(self):
+        import importlib.util
+        spec = importlib.util.spec_from_file_location("day", ROOT / "scripts" / "day.py")
+        day = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(day)
+        slots = day.parse(
+            "aula toda terça das 7h30 até 9h20 e academia toda quinta das 10h até 11h",
+            datetime(2026, 9, 17, tzinfo=timezone.utc),
+        )
+        self.assertEqual(
+            {tuple(slot["recurrence"]) for slot in slots},
+            {("RRULE:FREQ=WEEKLY;BYDAY=TU",), ("RRULE:FREQ=WEEKLY;BYDAY=TH",)},
+        )
+
+    def test_weekly_dump_does_not_create_a_second_series(self):
+        with tempfile.TemporaryDirectory() as h:
+            text = "aula toda terça das 7h30 até 9h20"
+            first = self.cli(h, "day", "--date", "2026-09-17", "--text", text)
+            second = self.cli(h, "day", "--date", "2026-09-24", "--text", text)
+        self.assertEqual(len(first["created"]), 1)
+        self.assertEqual(len(second["created"]), 0)
+        self.assertEqual(second["skipped"][0]["skipped"], "duplicate")
+
     def test_dump_overlap_is_a_conflict(self):
         import importlib.util
         spec = importlib.util.spec_from_file_location("day", ROOT / "scripts" / "day.py")
@@ -326,6 +349,8 @@ class MatrixTests(unittest.TestCase):
         cal = day.conflicts([planned[1]], existing)
         self.assertEqual(cal[0]["kind"], "calendar")
         self.assertEqual(cal[0]["existing"], "Call")
+        all_day = [{"summary": "Férias", "start": "2026-09-17", "end": "2026-09-18"}]
+        self.assertEqual(day.conflicts([planned[1]], all_day)[0]["existing"], "Férias")
         short = day.parse(
             "aula das 7h30 até 9h20 e academia das 9h até 10h",
             datetime(2026, 9, 17, tzinfo=timezone.utc).astimezone().replace(

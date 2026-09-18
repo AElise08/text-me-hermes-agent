@@ -90,6 +90,16 @@ class OvernightApplyTests(unittest.TestCase):
         self.assertEqual(report["approvals"][0]["action"], "cancel")
         self.assertEqual(report["approvals"][0]["event_id"], "aula1")
 
+    def test_unmatched_cancel_does_not_target_the_only_event(self):
+        report = self.mod.run(
+            apply=True,
+            messages=[{"subject": "aula cancelada", "snippet": "a aula de hoje foi cancelada", "from": "escola@x"}],
+            events=[dict(self.event, summary="Consulta médica")],
+            now=self.now,
+        )
+        self.assertEqual(report["approvals"][0]["action"], "cancel")
+        self.assertEqual(report["approvals"][0]["event_id"], "")
+
     def test_inbox_follows_their_work_and_life_words(self):
         state = {
             "goals": {"work": "hackathon video", "life": "church choir"},

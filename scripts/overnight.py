@@ -173,7 +173,7 @@ def match_event(text: str, events: list[dict]) -> dict | None:
         if overlap:
             scored.append((overlap, event))
     if not scored:
-        return events[0] if len(events) == 1 else None
+        return None
     scored.sort(key=lambda item: -item[0])
     if len(scored) == 1 or scored[0][0] > scored[1][0]:
         return scored[0][1]
