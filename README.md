@@ -12,9 +12,17 @@ keeps life and work apart, and answers with one thing to start.
 In the thread it calls itself **Matriz**. The agent, the repo, and the Agent
 Index listing are **text-me**.
 
-First question, in the language you wrote in:
+First text is not an interview. "hi" / "oi" already has a language — it
+replies in **that** language only, checks Plow Connectors (Gmail + Calendar,
+no Latch), and proposes one next step from what it found. If mail, calendar,
+and the list are empty, that first reply is:
 
 **Send me everything on your plate. I'll organize it and tell you where to start.**
+
+(Portuguese, if you wrote in Portuguese: **Despeja o que está na tua cabeça. Eu organizo e te digo por onde começar.**)
+
+The bilingual line is only for a first message with **no words** (empty SMS
+or an untranscribed attachment).
 
 ## What a session looks like (iMessage)
 
@@ -119,14 +127,25 @@ on that line first. Credentials stay out of the image (`.dockerignore`
 already drops `plow-credentials` and `.env`). You can also deploy a listing
 with `plow-agents deploy exe:hermes`.
 
+### One-click on the leaderboard
+
+Give the Plow team this listing. Gmail and Calendar are Plow Connectors
+(https://app.plow.co → Connectors), not Latch.
+
+- Agent Index: https://aiworthusing.com/agent-index/text-me
+- Agent Index ID: `text-me`
+- Repo: https://github.com/AElise08/text-me-hermes-agent
+- Image: `ghcr.io/aelise08/text-me-hermes-agent:v1` (digest on the latest green **image** Action)
+
 ## How to use it
 
 Text the line you minted.
 
 1. **First texts.** Write in the language you want replies in. text-me
-   mirrors it from the first message. If the first message has no words
-   (empty, or an untranscribed attachment), it sends one bilingual line and
-   then follows you.
+   mirrors it from the first message, checks Gmail and Calendar, and proposes
+   one next step. It does not ask what is most important. If the first
+   message has no words (empty, or an untranscribed attachment), it sends one
+   bilingual line and then follows you.
 
 2. **Dump, then start.** Send the list. It proposes an Eisenhower order and
    one next step. Correct it in the thread ("that's life, not work", "no
