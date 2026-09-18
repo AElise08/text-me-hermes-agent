@@ -9,6 +9,7 @@ from __future__ import annotations
 import json
 import os
 import re
+import sys
 import uuid
 import urllib.error
 import urllib.request
@@ -20,6 +21,12 @@ S6 = Path("/run/s6/container_environment")
 TOKEN_FILES = (
     Path("/var/lib/plow/account.token"),
 )
+
+HERE = Path(__file__).resolve().parent
+if str(HERE) not in sys.path:
+    sys.path.insert(0, str(HERE))
+
+import accounts as accounts_mod  # noqa: E402
 
 
 def env(name: str) -> str:
@@ -109,11 +116,18 @@ def day_window(when: datetime | None = None) -> tuple[str, str]:
     return start.isoformat(), end.isoformat()
 
 
-def events_on(when: datetime | None = None) -> list[dict]:
+def events_on(when: datetime | None = None, calendar_id: str = "", account: str = "") -> list[dict]:
     time_min, time_max = day_window(when)
+    account, calendar_id = accounts_mod.route(account, calendar_id)
     payload = call(
         "calendar.events.list",
-        {"time_min": time_min, "time_max": time_max, "max_results": 50},
+        {
+            "time_min": time_min,
+            "time_max": time_max,
+            "max_results": 50,
+            "calendar_id": calendar_id,
+            "account": account,
+        },
     )
     data = payload.get("data")
     if isinstance(data, dict):
@@ -136,8 +150,8 @@ def events_on(when: datetime | None = None) -> list[dict]:
                 "summary": item.get("summary") or "(no title)",
                 "start": start,
                 "end": end,
-                "calendar_id": item.get("calendar_id") or item.get("calendarId"),
-                "account": item.get("account"),
+                "calendar_id": item.get("calendar_id") or item.get("calendarId") or calendar_id,
+                "account": item.get("account") or account,
                 "hangout": meet_link(item),
                 "attendees": [
                     (person.get("email") or "").strip()
@@ -169,15 +183,16 @@ def line(event: dict) -> str:
     return title
 
 
-def day_lines(when: datetime | None = None) -> list[str]:
-    return [line(event) for event in events_on(when) if line(event)]
+def day_lines(when: datetime | None = None, calendar_id: str = "", account: str = "") -> list[str]:
+    return [line(event) for event in events_on(when, calendar_id, account) if line(event)]
 
 
-def events_today() -> list[dict]:
-    return events_on()
+def events_today(calendar_id: str = "", account: str = "") -> list[dict]:
+    return events_on(calendar_id=calendar_id, account=account)
 
 
-def event_by_id(event_id: str, calendar_id: str = "primary", account: str = "") -> dict:
+def event_by_id(event_id: str, calendar_id: str = "", account: str = "") -> dict:
+    account, calendar_id = accounts_mod.route(account, calendar_id)
     payload = call(
         "calendar.events.get",
         {"event_id": event_id, "calendar_id": calendar_id or "primary", "account": account or ""},
@@ -290,12 +305,17 @@ def create(
     meet: bool = False,
     attendees: list[str] | None = None,
     recurrence: list[str] | None = None,
+    calendar_id: str = "",
+    account: str = "",
 ) -> dict:
+    account, calendar_id = accounts_mod.route(account, calendar_id)
     body = {
         "summary": summary,
         "start": start,
         "end": end,
         "time_zone": str(zone()),
+        "calendar_id": calendar_id,
+        "account": account,
     }
     if description:
         body["description"] = description
@@ -313,50 +333,58 @@ def create(
     if rules:
         body["recurrence"] = rules
     payload = call("calendar.events.create", body)
+    data = payload.get("data") if isinstance(payload.get("data"), dict) else payload
+    accounts_mod.record("calendar", "create", account, calendar_id, str((data or {}).get("id") or ""))
     if meet:
         payload["hangout"] = meet_link(payload)
     return payload
 
 
 def update(event_id: str, calendar_id: str, account: str, **fields) -> dict:
-    body = {"event_id": event_id, "calendar_id": calendar_id or "primary", "account": account or ""}
+    account, calendar_id = accounts_mod.route(account, calendar_id)
+    body = {"event_id": event_id, "calendar_id": calendar_id, "account": account}
     body.update(fields)
-    return call("calendar.events.update", body)
+    payload = call("calendar.events.update", body)
+    accounts_mod.record("calendar", "update", account, calendar_id, event_id)
+    return payload
 
 
 def move(
     event_id: str,
     start: str,
     end: str = "",
-    calendar_id: str = "primary",
+    calendar_id: str = "",
     account: str = "",
     when: datetime | None = None,
 ) -> dict:
     if not end:
-        found = next((item for item in events_on(when) if item.get("id") == event_id), None)
+        found = next((item for item in events_on(when, calendar_id, account) if item.get("id") == event_id), None)
         if not found or not found.get("start") or not found.get("end"):
             raise SystemExit("move needs --end (event not on that day)")
         end = (_stamp(start) + (_stamp(found["end"]) - _stamp(found["start"]))).isoformat()
     return update(event_id, calendar_id, account, start=start, end=end, **_notify({}))
 
 
-def cancel(event_id: str, calendar_id: str = "primary", account: str = "") -> dict:
-    return call(
+def cancel(event_id: str, calendar_id: str = "", account: str = "") -> dict:
+    account, calendar_id = accounts_mod.route(account, calendar_id)
+    payload = call(
         "calendar.events.delete",
         _notify(
             {
                 "event_id": event_id,
-                "calendar_id": calendar_id or "primary",
-                "account": account or "",
+                "calendar_id": calendar_id,
+                "account": account,
             }
         ),
     )
+    accounts_mod.record("calendar", "cancel", account, calendar_id, event_id)
+    return payload
 
 
 def invite(
     event_id: str,
     attendees: list[str],
-    calendar_id: str = "primary",
+    calendar_id: str = "",
     account: str = "",
     meet: bool = False,
     when: datetime | None = None,
@@ -389,9 +417,13 @@ def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description="Plow Calendar over REST (no Latch).")
     sub = parser.add_subparsers(dest="cmd", required=True)
     sub.add_parser("status")
-    sub.add_parser("today")
+    today = sub.add_parser("today")
+    today.add_argument("--calendar-id", default="")
+    today.add_argument("--account", default="")
     on = sub.add_parser("on")
     on.add_argument("--date", required=True, help="YYYY-MM-DD")
+    on.add_argument("--calendar-id", default="")
+    on.add_argument("--account", default="")
     make = sub.add_parser("create")
     make.add_argument("--summary", required=True)
     make.add_argument("--start", required=True)
@@ -399,22 +431,24 @@ def main(argv: list[str] | None = None) -> int:
     make.add_argument("--description", default="")
     make.add_argument("--meet", action="store_true", help="attach a Google Meet link")
     make.add_argument("--to", action="append", default=[], help="invitee email (repeatable)")
+    make.add_argument("--calendar-id", default="")
+    make.add_argument("--account", default="")
     shift = sub.add_parser("move")
     shift.add_argument("--id", required=True)
     shift.add_argument("--start", required=True)
     shift.add_argument("--end", default="")
-    shift.add_argument("--calendar-id", default="primary")
+    shift.add_argument("--calendar-id", default="")
     shift.add_argument("--account", default="")
     shift.add_argument("--date", default="")
     drop = sub.add_parser("cancel")
     drop.add_argument("--id", required=True)
-    drop.add_argument("--calendar-id", default="primary")
+    drop.add_argument("--calendar-id", default="")
     drop.add_argument("--account", default="")
     guest = sub.add_parser("invite")
     guest.add_argument("--id", required=True)
     guest.add_argument("--to", action="append", default=[], help="invitee email (repeatable)")
     guest.add_argument("--meet", action="store_true")
-    guest.add_argument("--calendar-id", default="primary")
+    guest.add_argument("--calendar-id", default="")
     guest.add_argument("--account", default="")
     guest.add_argument("--date", default="")
     args = parser.parse_args(argv)
@@ -422,11 +456,11 @@ def main(argv: list[str] | None = None) -> int:
         print(json.dumps(call("status"), ensure_ascii=False))
         return 0
     if args.cmd == "today":
-        print(json.dumps({"events": events_today()}, ensure_ascii=False))
+        print(json.dumps({"events": events_today(args.calendar_id, args.account)}, ensure_ascii=False))
         return 0
     if args.cmd == "on":
         when = datetime.strptime(args.date, "%Y-%m-%d").replace(tzinfo=zone())
-        print(json.dumps({"date": args.date, "events": events_on(when)}, ensure_ascii=False))
+        print(json.dumps({"date": args.date, "events": events_on(when, args.calendar_id, args.account)}, ensure_ascii=False))
         return 0
     if args.cmd == "move":
         when = None
@@ -464,6 +498,8 @@ def main(argv: list[str] | None = None) -> int:
                 args.description,
                 meet=args.meet,
                 attendees=people,
+                calendar_id=args.calendar_id,
+                account=args.account,
             ),
             ensure_ascii=False,
         )

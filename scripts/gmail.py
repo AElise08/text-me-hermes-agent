@@ -25,9 +25,17 @@ if str(HERE) not in sys.path:
     sys.path.insert(0, str(HERE))
 
 import gcal as gcal_mod  # noqa: E402
+import accounts as accounts_mod  # noqa: E402
 
 
-def mint_google_token() -> str:
+def selected_account(account: str = "") -> str:
+    if account.strip():
+        raise SystemExit("Plow Gmail currently uses its default mailbox; selecting another account is not available yet")
+    return ""
+
+
+def mint_google_token(account: str = "") -> str:
+    selected_account(account)
     payload = gcal_mod.call("access-token", {})
     data = payload.get("data") if isinstance(payload, dict) else payload
     token = (data or {}).get("access_token") if isinstance(data, dict) else None
@@ -53,11 +61,12 @@ def gmail_api(method: str, path: str, body: dict | None = None, token: str | Non
         raise SystemExit(f"gmail API {method} {path} HTTP {exc.code}: {detail}") from exc
 
 
-def profile() -> dict:
-    return gmail_api("GET", "/profile")
+def profile(account: str = "") -> dict:
+    return gmail_api("GET", "/profile", token=mint_google_token(account))
 
 
-def list_messages(query: str = "", max_results: int = 10) -> list[dict]:
+def list_messages(query: str = "", max_results: int = 10, account: str = "") -> list[dict]:
+    selected_account(account)
     body: dict = {"max_results": min(int(max_results), 25)}
     if query:
         body["query"] = query
@@ -93,8 +102,8 @@ def parse_message(msg: dict) -> dict:
     }
 
 
-def get_message(message_id: str) -> dict:
-    return parse_message(gmail_api("GET", f"/messages/{message_id}?format=full"))
+def get_message(message_id: str, account: str = "") -> dict:
+    return parse_message(gmail_api("GET", f"/messages/{message_id}?format=full", token=mint_google_token(account)))
 
 
 def _plain(payload: dict) -> str:
@@ -144,11 +153,16 @@ def build_raw(
     return base64.urlsafe_b64encode(bytes(msg)).decode().rstrip("=")
 
 
-def inbox_clips(interests: list[str] | None = None, avoid: list[str] | None = None, max_results: int = 8) -> list[str]:
+def inbox_clips(
+    interests: list[str] | None = None,
+    avoid: list[str] | None = None,
+    max_results: int = 8,
+    account: str = "",
+) -> list[str]:
     interests = [x.lower() for x in (interests or []) if x]
     avoid = [x.lower() for x in (avoid or []) if x]
     try:
-        messages = list_messages(max_results=max_results)
+        messages = list_messages(max_results=max_results, account=account)
     except SystemExit:
         return []
     clips: list[str] = []
@@ -182,11 +196,11 @@ OWN_EDITION = (
 HOT = ("re:", "fwd:", "reunião", "meeting", "cancel", "cancelou", "urgente", "?", "moved", "updated")
 
 
-def overnight(avoid: list[str] | None = None, max_results: int = 10) -> list[str]:
+def overnight(avoid: list[str] | None = None, max_results: int = 10, account: str = "") -> list[str]:
     """What would make someone unlock the phone: a person waiting, a meeting that moved."""
     avoid = [x.lower() for x in (avoid or []) if x]
     try:
-        messages = list_messages(max_results=max_results)
+        messages = list_messages(max_results=max_results, account=account)
     except SystemExit:
         return []
     out: list[str] = []
@@ -207,18 +221,28 @@ def overnight(avoid: list[str] | None = None, max_results: int = 10) -> list[str
     return out[:6]
 
 
-def send(to: str, subject: str, body: str = "", files: list[Path] | None = None) -> dict:
-    tok = mint_google_token()
+def send(to: str, subject: str, body: str = "", files: list[Path] | None = None, account: str = "") -> dict:
+    selected_account(account)
+    tok = mint_google_token(account)
     from_addr = gmail_api("GET", "/profile", token=tok).get("emailAddress") or ""
     if not from_addr:
         raise SystemExit("gmail profile has no emailAddress")
     raw = build_raw(from_addr, to, subject, body, files)
-    return gmail_api("POST", "/messages/send", {"raw": raw}, token=tok)
+    sent = gmail_api("POST", "/messages/send", {"raw": raw}, token=tok)
+    accounts_mod.record("gmail", "send", from_addr, resource_id=str(sent.get("id") or ""))
+    return sent
 
 
-def compose_reply(message_id: str, body: str, reply_all: bool = False, token: str | None = None) -> dict:
+def compose_reply(
+    message_id: str,
+    body: str,
+    reply_all: bool = False,
+    token: str | None = None,
+    account: str = "",
+) -> dict:
     """Build an in-thread reply. Does not send."""
-    tok = token or mint_google_token()
+    selected_account(account)
+    tok = token or mint_google_token(account)
     parsed = parse_message(gmail_api("GET", f"/messages/{message_id}?format=full", token=tok))
     me = (gmail_api("GET", "/profile", token=tok).get("emailAddress") or "").casefold()
     if not me:
@@ -254,16 +278,19 @@ def compose_reply(message_id: str, body: str, reply_all: bool = False, token: st
         "token": tok,
         "from": me,
         "in_reply_to": parsed.get("id") or message_id,
+        "account": me,
     }
 
 
-def reply(message_id: str, body: str, reply_all: bool = False) -> dict:
+def reply(message_id: str, body: str, reply_all: bool = False, account: str = "") -> dict:
     """Send in the same Gmail thread. Prefer draft_reply until they say envia."""
-    composed = compose_reply(message_id, body, reply_all=reply_all)
+    composed = compose_reply(message_id, body, reply_all=reply_all, account=account)
     payload: dict = {"raw": composed["raw"]}
     if composed.get("thread_id"):
         payload["threadId"] = composed["thread_id"]
-    return gmail_api("POST", "/messages/send", payload, token=composed["token"])
+    sent = gmail_api("POST", "/messages/send", payload, token=composed["token"])
+    accounts_mod.record("gmail", "reply", composed["account"], resource_id=str(sent.get("id") or ""))
+    return sent
 
 
 def save_draft(raw: str, thread_id: str = "", token: str | None = None) -> dict:
@@ -273,11 +300,11 @@ def save_draft(raw: str, thread_id: str = "", token: str | None = None) -> dict:
     return gmail_api("POST", "/drafts", payload, token=token)
 
 
-def draft_reply(message_id: str, body: str, reply_all: bool = False) -> dict:
+def draft_reply(message_id: str, body: str, reply_all: bool = False, account: str = "") -> dict:
     """Write a reply into Drafts. Nothing leaves the inbox until send_draft."""
-    composed = compose_reply(message_id, body, reply_all=reply_all)
+    composed = compose_reply(message_id, body, reply_all=reply_all, account=account)
     saved = save_draft(composed["raw"], composed["thread_id"], token=composed["token"])
-    return {
+    out = {
         "id": saved.get("id") or "",
         "to": composed["to"],
         "subject": composed["subject"],
@@ -286,26 +313,31 @@ def draft_reply(message_id: str, body: str, reply_all: bool = False) -> dict:
         "in_reply_to": composed["in_reply_to"],
         "draft": saved,
     }
+    accounts_mod.record("gmail", "draft", composed["account"], resource_id=out["id"])
+    return out
 
 
-def draft_new(to: str, subject: str, body: str = "") -> dict:
-    tok = mint_google_token()
+def draft_new(to: str, subject: str, body: str = "", account: str = "") -> dict:
+    selected_account(account)
+    tok = mint_google_token(account)
     me = gmail_api("GET", "/profile", token=tok).get("emailAddress") or ""
     if not me:
         raise SystemExit("gmail profile has no emailAddress")
     raw = build_raw(me, to, subject, body)
     saved = save_draft(raw, token=tok)
-    return {
+    out = {
         "id": saved.get("id") or "",
         "to": to,
         "subject": subject,
         "body": body,
         "draft": saved,
     }
+    accounts_mod.record("gmail", "draft", me, resource_id=out["id"])
+    return out
 
 
-def list_drafts(max_results: int = 8) -> list[dict]:
-    tok = mint_google_token()
+def list_drafts(max_results: int = 8, account: str = "") -> list[dict]:
+    tok = mint_google_token(account)
     listing = gmail_api(
         "GET",
         f"/drafts?maxResults={max(1, min(int(max_results), 20))}",
@@ -334,24 +366,29 @@ def list_drafts(max_results: int = 8) -> list[dict]:
     return out
 
 
-def send_draft(draft_id: str) -> dict:
+def send_draft(draft_id: str, account: str = "") -> dict:
     """The 'envia' action. Sends one Gmail draft."""
     if not (draft_id or "").strip():
         raise SystemExit("send-draft needs a draft id")
-    return gmail_api("POST", "/drafts/send", {"id": draft_id.strip()})
+    selected_account(account)
+    sent = gmail_api("POST", "/drafts/send", {"id": draft_id.strip()}, token=mint_google_token(account))
+    accounts_mod.record("gmail", "send_draft", resource_id=str(sent.get("id") or draft_id.strip()))
+    return sent
 
 
-def send_kindle(kindle_email: str, epub: Path, title: str) -> dict:
+def send_kindle(kindle_email: str, epub: Path, title: str, account: str = "") -> dict:
     return send(
         kindle_email,
         title,
         "Daily edition from text-me (Send to Kindle).",
         files=[epub],
+        account=account,
     )
 
 
 def main() -> int:
     parser = argparse.ArgumentParser(description="Read/send owner Gmail via Plow (no Latch).")
+    parser.add_argument("--account", default="", help="connected Google account; defaults to the configured account")
     sub = parser.add_subparsers(dest="cmd", required=True)
     sub.add_parser("profile")
     listing = sub.add_parser("list")
@@ -388,39 +425,39 @@ def main() -> int:
     kindle.add_argument("--title", default="text-me edition")
     args = parser.parse_args()
     if args.cmd == "profile":
-        print(json.dumps(profile(), ensure_ascii=False))
+        print(json.dumps(profile(args.account), ensure_ascii=False))
         return 0
     if args.cmd == "list":
-        print(json.dumps({"messages": list_messages(args.query, args.max)}, ensure_ascii=False))
+        print(json.dumps({"messages": list_messages(args.query, args.max, args.account)}, ensure_ascii=False))
         return 0
     if args.cmd == "clips":
         interests = [x.strip() for x in args.interests.split(",") if x.strip()]
         avoid = [x.strip() for x in args.avoid.split(",") if x.strip()]
-        print(json.dumps({"clips": inbox_clips(interests, avoid)}, ensure_ascii=False))
+        print(json.dumps({"clips": inbox_clips(interests, avoid, account=args.account)}, ensure_ascii=False))
         return 0
     if args.cmd == "get":
-        print(json.dumps(get_message(args.id), ensure_ascii=False))
+        print(json.dumps(get_message(args.id, args.account), ensure_ascii=False))
         return 0
     if args.cmd == "draft":
-        print(json.dumps(draft_reply(args.id, args.body, reply_all=args.reply_all), ensure_ascii=False))
+        print(json.dumps(draft_reply(args.id, args.body, reply_all=args.reply_all, account=args.account), ensure_ascii=False))
         return 0
     if args.cmd == "drafts":
-        print(json.dumps({"drafts": list_drafts()}, ensure_ascii=False))
+        print(json.dumps({"drafts": list_drafts(account=args.account)}, ensure_ascii=False))
         return 0
     if args.cmd == "send-draft":
-        print(json.dumps(send_draft(args.id), ensure_ascii=False))
+        print(json.dumps(send_draft(args.id, args.account), ensure_ascii=False))
         return 0
     if args.cmd == "draft-new":
-        print(json.dumps(draft_new(args.to, args.subject, args.body), ensure_ascii=False))
+        print(json.dumps(draft_new(args.to, args.subject, args.body, args.account), ensure_ascii=False))
         return 0
     if args.cmd == "reply":
-        print(json.dumps(reply(args.id, args.body, reply_all=args.reply_all), ensure_ascii=False))
+        print(json.dumps(reply(args.id, args.body, reply_all=args.reply_all, account=args.account), ensure_ascii=False))
         return 0
     if args.cmd == "send":
         files = [Path(p) for p in args.file]
-        print(json.dumps(send(args.to, args.subject, args.body, files), ensure_ascii=False))
+        print(json.dumps(send(args.to, args.subject, args.body, files, args.account), ensure_ascii=False))
         return 0
-    print(json.dumps(send_kindle(args.to, Path(args.epub), args.title), ensure_ascii=False))
+    print(json.dumps(send_kindle(args.to, Path(args.epub), args.title, args.account), ensure_ascii=False))
     return 0
 
 

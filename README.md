@@ -202,6 +202,27 @@ work over REST: mount `~/.config/plow/token` (from `plow-agents login`) into
 the container. Latch is optional. `connectors.py` / `gcal.py status` should
 show `connected: true`.
 
+If you connect more than one Google account, name each one and choose the
+default destination before the agent writes anything. The same setup works for
+personal, school, work, or an agent mailbox; every calendar or mail write is
+recorded locally by account so you can inspect it later.
+
+```sh
+# Add each account after it appears in Connectors.
+python3 /var/lib/hermes/scripts/matriz.py google add --account me@example.com --label "Personal"
+python3 /var/lib/hermes/scripts/matriz.py google add --account school@example.edu --label "School" --calendar-id primary
+python3 /var/lib/hermes/scripts/matriz.py google default --account me@example.com --calendar-id primary
+
+# See the configured accounts and the latest writes by account.
+python3 /var/lib/hermes/scripts/matriz.py google show
+python3 /var/lib/hermes/scripts/matriz.py google audit --account school@example.edu
+```
+
+Use `--account` and `--calendar-id` on `gcal.py` when a one-off event belongs
+somewhere else. Plow currently supports mailbox selection only for Calendar;
+Gmail uses the Plow connector's default mailbox and refuses an account override
+instead of silently reading or sending from the wrong address.
+
 A dumped day with clock times is `matriz.py day --text "..."` — paste the
 **whole** message. It creates every interval (not one focus block). A later
 "ok" after a proposed extra block (`block start`) is only for time you did

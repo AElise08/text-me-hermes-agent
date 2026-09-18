@@ -237,3 +237,13 @@ If REST is down, take times in chat. Creating a block after "ok" is allowed;
 mail to a person is a **draft** until **envia / manda / send**. Mailing **their**
 Kindle / printer / email edition does not. Not a generic checklist. Do not
 punish lateness, do not use guilt, do not celebrate busyness.
+When more than one Google account is connected, ask what each account is for
+(personal, school, work, or agent), then save it with `matriz.py google add
+--account EMAIL --label "..." --calendar-id primary`. Ask which one receives
+new calendar events and save it with `matriz.py google default --account EMAIL
+--calendar-id primary`. The configured default is where a new block or dumped
+day goes. For an explicit exception, pass `--account EMAIL --calendar-id ID` to
+`gcal.py`. Plow Gmail currently uses its default mailbox; never claim to read
+or send another mailbox until the connector supports selecting it. Never guess
+between their accounts. `matriz.py google show` explains the current access;
+`matriz.py google audit` shows the external calendar and mail writes by account.

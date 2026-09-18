@@ -115,10 +115,15 @@ class GmailTests(unittest.TestCase):
             captured["body"] = body
             return {"id": "msg-sent"}
 
-        with patch.object(gmail, "gmail_api", fake_api):
+        with patch.object(gmail, "gmail_api", fake_api), patch.object(gmail, "mint_google_token", return_value="tok"):
             gmail.send_draft("r-99")
         self.assertEqual(captured["path"], "/drafts/send")
         self.assertEqual(captured["body"]["id"], "r-99")
+
+    def test_list_refuses_an_account_the_plow_gmail_api_cannot_select(self):
+        gmail = load("gmail_account", "scripts/gmail.py")
+        with self.assertRaisesRegex(SystemExit, "default mailbox"):
+            gmail.list_messages(account="school@example.edu")
 
     def test_inbox_clips_skips_avoid_and_keeps_interests(self):
         gmail = load("gmail_mod2", "scripts/gmail.py")

@@ -370,6 +370,34 @@ class MatrixTests(unittest.TestCase):
             mails = self.cli(h, "people", "emails", "--text", "call with Ana")["emails"]
             self.assertEqual(mails, ["ana@x.com"])
 
+    def test_google_accounts_name_their_purpose_and_choose_the_calendar(self):
+        with tempfile.TemporaryDirectory() as h:
+            self.cli(h, "google", "add", "--account", "me@example.com", "--label", "Pessoal")
+            self.cli(
+                h,
+                "google",
+                "add",
+                "--account",
+                "school@example.edu",
+                "--label",
+                "Faculdade",
+                "--calendar-id",
+                "school-calendar",
+            )
+            out = self.cli(
+                h,
+                "google",
+                "default",
+                "--account",
+                "me@example.com",
+                "--calendar-id",
+                "personal-calendar",
+            )
+        google = out["google"]
+        self.assertEqual(google["default_account"], "me@example.com")
+        self.assertEqual(google["default_calendar_id"], "personal-calendar")
+        self.assertEqual({row["label"] for row in google["accounts"]}, {"Pessoal", "Faculdade"})
+
     def test_learn_reading_and_hobby_and_edition_separates_them(self):
         with tempfile.TemporaryDirectory() as h:
             self.cli(h, "learn", "add", "--sphere", "reading", "--text", "lista de livros")

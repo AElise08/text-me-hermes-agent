@@ -168,7 +168,7 @@ class GcalTests(unittest.TestCase):
             captured["body"] = body
             return {"status": "ok"}
 
-        def fake_events(when=None):
+        def fake_events(when=None, calendar_id="", account=""):
             return [
                 {
                     "id": "evt1",
@@ -183,6 +183,25 @@ class GcalTests(unittest.TestCase):
         self.assertEqual(captured["body"]["start"], "2026-09-17T11:00:00-03:00")
         self.assertEqual(captured["body"]["end"], "2026-09-17T11:45:00-03:00")
         self.assertEqual(captured["body"]["sendUpdates"], "all")
+
+    def test_create_routes_to_selected_account_and_calendar(self):
+        gcal = load_gcal()
+        captured = {}
+
+        def fake_call(action, body=None, method=None):
+            captured["body"] = body
+            return {"status": "ok", "data": {"id": "evt-account"}}
+
+        with patch.object(gcal, "call", fake_call):
+            gcal.create(
+                "Aula",
+                "2026-09-17T10:00:00-03:00",
+                "2026-09-17T11:00:00-03:00",
+                calendar_id="personal",
+                account="personal@example.com",
+            )
+        self.assertEqual(captured["body"]["calendar_id"], "personal")
+        self.assertEqual(captured["body"]["account"], "personal@example.com")
 
     def test_cancel_deletes(self):
         gcal = load_gcal()

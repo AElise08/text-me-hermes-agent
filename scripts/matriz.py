@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import argparse
+import accounts as accounts_mod  # noqa: E402
 import fcntl
 import json
 import os
@@ -70,6 +71,7 @@ def blank_profile() -> dict:
         "edition_hour": 7,
         "timezone": "",
         "charge": False,
+        "google": {"accounts": [], "default_account": "", "default_calendar_id": "primary"},
     }
 
 
@@ -98,6 +100,7 @@ def load() -> dict:
     data.setdefault("language", "")
     data.setdefault("profile", blank_profile())
     data["profile"] = {**blank_profile(), **data["profile"]}
+    data["profile"]["google"] = {**blank_profile()["google"], **(data["profile"].get("google") or {})}
     data.setdefault("durations", {})
     data.setdefault("blocks", [])
     data.setdefault("commitments", [])
@@ -391,6 +394,19 @@ def parse() -> argparse.Namespace:
     mail_p = who_sub.add_parser("emails")
     mail_p.add_argument("--text", required=True)
 
+    google = sub.add_parser("google")
+    google_sub = google.add_subparsers(dest="action", required=True)
+    add_google = google_sub.add_parser("add")
+    add_google.add_argument("--account", required=True)
+    add_google.add_argument("--label", default="")
+    add_google.add_argument("--calendar-id", default="primary")
+    set_google = google_sub.add_parser("default")
+    set_google.add_argument("--account", required=True)
+    set_google.add_argument("--calendar-id", default="primary")
+    google_sub.add_parser("show")
+    audit_google = google_sub.add_parser("audit")
+    audit_google.add_argument("--account", default="")
+
     dur = sub.add_parser("duration")
     dur_sub = dur.add_subparsers(dest="action", required=True)
     suggest = dur_sub.add_parser("suggest")
@@ -576,6 +592,29 @@ def main() -> None:
             dump({"emails": people_mod.emails_for(args.text, data["people"])})
             return
         dump({"people": data["people"]})
+        return
+
+    if args.cmd == "google":
+        google = data["profile"].setdefault("google", blank_profile()["google"])
+        if args.action == "add":
+            row = accounts_mod.upsert(google, args.account, args.label, args.calendar_id)
+            if not google.get("default_account"):
+                google["default_account"] = row["account"]
+                google["default_calendar_id"] = row["calendar_id"]
+            save(data)
+            dump({"account": row, "google": google})
+            return
+        if args.action == "default":
+            account = args.account.strip().casefold()
+            if not any(row.get("account") == account for row in google.get("accounts") or []):
+                raise SystemExit("add the Google account before making it the default")
+            google["default_account"] = account
+            google["default_calendar_id"] = args.calendar_id.strip() or "primary"
+            save(data)
+        if args.action == "audit":
+            dump({"audit": accounts_mod.audit(args.account)})
+            return
+        dump({"google": google})
         return
 
     if args.cmd == "duration":
