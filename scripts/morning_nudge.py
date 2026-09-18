@@ -25,30 +25,42 @@ if not skip:
     try:
         built = json.loads(subprocess.check_output(["python3", str(script), "edition"], text=True))
         if built.get("sent"):
-            edition = f" Edition mailed to {built.get('to','')}. / Edição enviada."
+            edition = (
+                " A edição do dia foi enviada."
+                if lang.startswith("pt")
+                else " Today's edition was mailed."
+            )
         elif delivery == "kindle":
-            edition = f" Edition on your Kindle ({built.get('epub','')}). / Edição no teu Kindle."
+            edition = (
+                " A edição do dia está no Kindle."
+                if lang.startswith("pt")
+                else " Today's edition is on your Kindle."
+            )
         elif delivery == "printer":
-            edition = f" Edition ready to print: {built.get('pdf') or built.get('markdown','')}."
+            edition = (
+                " A edição está pronta para imprimir."
+                if lang.startswith("pt")
+                else " Today's edition is ready to print."
+            )
         elif delivery == "email":
-            edition = f" Edition filed: {built.get('markdown','')}."
-        elif delivery == "message" or built:
-            edition = ""
+            edition = (
+                " A edição foi para o teu email."
+                if lang.startswith("pt")
+                else " Today's edition is in your email."
+            )
     except subprocess.CalledProcessError:
         pass
 
-if not lang:
-    print(
-        "Good morning. What's the most important — not necessarily urgent — thing today? / "
-        "Bom dia. Qual é a coisa mais importante — não necessariamente urgente — de hoje?"
-        + edition
+pt = lang.startswith("pt")
+if not work and not life and not any(goals.values()):
+    msg = (
+        "Despeja o que está na tua cabeça. Eu organizo e te digo por onde começar."
+        if pt
+        else "Send me everything on your plate. I'll organize it and tell you where to start."
     )
-    raise SystemExit
-if lang.startswith("pt"):
-    if not work and not life and not any(goals.values()):
-        msg = "Bom dia. Qual é a coisa mais importante — não necessariamente urgente — de hoje?"
-    else:
-        parts = []
+else:
+    parts = []
+    if pt:
         if work:
             parts.append("Trabalho: " + work[0]["text"])
         elif goals.get("work"):
@@ -57,19 +69,8 @@ if lang.startswith("pt"):
             parts.append("Vida: " + life[0]["text"])
         elif goals.get("life"):
             parts.append("Vida: avance " + goals["life"])
-        msg = (
-            "Bom dia. Foco de hoje: "
-            + "; ".join(parts)
-            + ". O que é importante, mesmo sem urgência, que precisa de espaço hoje?"
-        )
-    if delivery == "kindle":
-        msg += " A edição do dia foi gerada pro Kindle — sincroniza no Wi-Fi antes de sair."
-    print(msg)
-else:
-    if not work and not life and not any(goals.values()):
-        msg = "Good morning. What's the most important — not necessarily urgent — thing today?"
+        msg = "Bom dia. Foco de hoje: " + "; ".join(parts) + "."
     else:
-        parts = []
         if work:
             parts.append("Work: " + work[0]["text"])
         elif goals.get("work"):
@@ -78,11 +79,11 @@ else:
             parts.append("Life: " + life[0]["text"])
         elif goals.get("life"):
             parts.append("Life: move " + goals["life"])
-        msg = (
-            "Good morning. Today's focus: "
-            + "; ".join(parts)
-            + ". What important, even if not urgent, thing needs space today?"
-        )
-    if delivery == "kindle":
-        msg += " Today's edition is ready for your Kindle — it syncs over Wi-Fi."
-    print(msg)
+        msg = "Good morning. Today's focus: " + "; ".join(parts) + "."
+if delivery == "kindle" and "Kindle" not in msg and "Kindle" not in edition:
+    msg += (
+        " A edição do dia foi gerada pro Kindle — sincroniza no Wi-Fi antes de sair."
+        if pt
+        else " Today's edition is ready for your Kindle — it syncs over Wi-Fi."
+    )
+print(msg + edition)

@@ -6,4 +6,8 @@ envdir=/run/s6/container_environment
 if [ -s "$file" ]; then
   tr -d '\n' < "$file" > "$envdir/PLOW_CONNECTOR_TOKEN"
   chmod 600 "$envdir/PLOW_CONNECTOR_TOKEN"
+elif [ -s "$envdir/PLOW_AGENT_TOKEN" ] && [ ! -s "$envdir/PLOW_CONNECTOR_TOKEN" ]; then
+  # Cloud: the line token can call Connectors on the same Plow account.
+  cp "$envdir/PLOW_AGENT_TOKEN" "$envdir/PLOW_CONNECTOR_TOKEN"
+  chmod 600 "$envdir/PLOW_CONNECTOR_TOKEN"
 fi

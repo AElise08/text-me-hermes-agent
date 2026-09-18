@@ -4,11 +4,9 @@ owner has connected their Google account.
 
 Why this exists
 ---------------
-Plow hands the agent its outside-world tools (Gmail, Google Calendar, Slack)
-through the relay MCP, not through a REST endpoint the agent token may call:
-the same call returns 403 "Token does not have access to gmail:calendar.list".
-So the only honest way to answer "is the calendar available?" is to ask the
-relay what tools it is offering right now.
+Optional: list tools the Latch *relay* is offering. text-me does **not** use
+this for Gmail or Calendar — those are REST via connectors.py / gcal.py /
+gmail.py. A missing relay is normal and not a failure of Google.
 
 Usage:
   python3 plow_tools.py            # list every tool
@@ -80,7 +78,8 @@ def main() -> int:
     token = value("PLOW_AGENT_TOKEN")
     if not url or not token:
         print("no PLOW_MCP_URL / PLOW_AGENT_TOKEN in the environment — "
-              "this only works inside the agent container.", file=sys.stderr)
+              "this lists Latch relay tools, which text-me does not need "
+              "for Gmail or Calendar. Use connectors.py instead.", file=sys.stderr)
         return 1
 
     status, body = rpc(url, token, {
@@ -91,8 +90,8 @@ def main() -> int:
     if status // 100 != 2:
         detail = body.get("detail") if isinstance(body, dict) else body
         print(f"relay not reachable ({status}): {detail}", file=sys.stderr)
-        print("The owner's Plow relay device must be online for any connector "
-              "tool to exist.", file=sys.stderr)
+        print("Latch relay did not answer. Gmail and Calendar still go through "
+              "connectors.py — Latch is not required.", file=sys.stderr)
         return 1
 
     status, body = rpc(url, token,

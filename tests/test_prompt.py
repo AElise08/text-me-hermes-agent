@@ -12,6 +12,11 @@ class PromptTests(unittest.TestCase):
         self.assertIn("Reply in the language the person actually wrote in", soul)
         self.assertIn("from their very first message", soul)
         self.assertIn("Only when the first message carries no words at all", soul)
+        self.assertIn("Never English and Portuguese", soul)
+        self.assertIn("same turn", soul)
+        self.assertIn("Do not ask what is most important", soul)
+        self.assertNotIn("stay bilingual", soul)
+        self.assertNotIn("not necessarily urgent", soul)
 
     def test_proposal_first_survives(self):
         soul = (ROOT / "runtime" / "SOUL.md").read_text(encoding="utf-8")

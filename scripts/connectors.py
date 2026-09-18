@@ -1,9 +1,10 @@
 #!/usr/bin/env python3
 """Google Calendar and Gmail without Latch.
 
-Primary path: REST /v1/connectors/gmail/* with the plow-agents *account*
-token (PLOW_CONNECTOR_TOKEN). Agent tokens 403. Latch is optional.
-Gmail send/read mint a short-lived Google token (gmail.modify).
+REST /v1/connectors/gmail/* . On Plow Cloud the line token
+(PLOW_AGENT_TOKEN) is enough when Google is linked on that same account.
+PLOW_CONNECTOR_TOKEN is only for a different Plow account. Latch is optional
+and is never how we decide if Gmail works.
 """
 from __future__ import annotations
 
@@ -37,7 +38,7 @@ def rest_status() -> dict:
         return {
             "ok": False,
             "path": "rest",
-            "reason": "no account token (PLOW_CONNECTOR_TOKEN / ~/.config/plow/token)",
+            "reason": "no Plow token for connectors",
         }
     try:
         body = gcal.call("status")
@@ -88,7 +89,7 @@ def latch_status() -> dict:
 
 def probe() -> dict:
     rest, latch = rest_status(), latch_status()
-    google = rest["ok"] or latch["ok"]
+    google = rest["ok"]
     try:
         import printer as printer_mod
     except ImportError:
@@ -114,17 +115,18 @@ def _advice(rest: dict, latch: dict, ipp: dict) -> str:
     bits = []
     if rest["ok"]:
         bits.append(
-            "REST Calendar and Gmail (read + send) are up. "
-            "Printer PDF goes to the printer's email (HP ePrint / Epson / Brother) "
-            "the same way Kindle gets EPUB. No Mac required."
+            "Calendar and Gmail (read + send) are up on Plow Connectors. "
+            "No Latch, no Mac. Printer PDF goes to the printer's email "
+            "(HP ePrint / Epson / Brother) the same way Kindle gets EPUB."
         )
-    elif latch["ok"]:
-        bits.append("Latch is up. Calendar and Gmail via the owner's computer.")
     else:
+        reason = rest.get("reason") or "not connected"
         bits.append(
-            "Google is not reachable. Connect Google at "
-            "https://app.plow.co → Connectors, then mount the plow-agents login "
-            "token (~/.config/plow/token) as PLOW_CONNECTOR_TOKEN."
+            "Google is not reachable via Plow Connectors "
+            f"({reason}). Connect Gmail and Calendar at "
+            "https://app.plow.co → Connectors on the same account as this chat. "
+            "Do not use Latch for this. Do not open the site in a browser to check — "
+            "this probe is the check."
         )
     if ipp.get("ok"):
         bits.append(f"IPP printer reachable at {ipp.get('uri')}.")

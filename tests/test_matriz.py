@@ -42,11 +42,15 @@ class MatrixTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as h:
             e = {**os.environ, "HERMES_HOME": h}
             out = subprocess.check_output(["python3", str(NUDGE)], env=e, text=True)
-            self.assertIn("most important", out)
-            self.assertIn("mais importante", out)
+            self.assertIn("on your plate", out)
+            self.assertNotIn("mais importante", out)
+            self.assertNotIn("most important", out)
+            self.assertNotIn("Bom dia", out)
             self.cli(h, "language", "set", "pt")
             out = subprocess.check_output(["python3", str(NUDGE)], env=e, text=True)
-            self.assertIn("mais importante", out)
+            self.assertIn("Despeja", out)
+            self.assertNotIn("on your plate", out)
+            self.assertNotIn("most important", out)
 
     def test_update_category(self):
         with tempfile.TemporaryDirectory() as h:

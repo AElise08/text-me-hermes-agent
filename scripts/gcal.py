@@ -30,6 +30,12 @@ def env(name: str) -> str:
 
 
 def token() -> str:
+    """Account token first; on Plow Cloud the line's agent token is enough.
+
+    Google linked at app.plow.co → Connectors belongs to the same account as
+    the chat line. PLOW_CONNECTOR_TOKEN is only needed when Google lives on a
+    *different* Plow account. Latch is never this path.
+    """
     value = env("PLOW_CONNECTOR_TOKEN")
     if value:
         return value
@@ -43,6 +49,10 @@ def token() -> str:
             continue
         if text:
             return text.splitlines()[0].strip()
+    for name in ("PLOW_AGENT_TOKEN", "PLOW_CHAT_TOKEN"):
+        value = env(name)
+        if value:
+            return value
     return ""
 
 
@@ -53,7 +63,9 @@ def base() -> str:
 def call(action: str, body: dict | None = None, method: str | None = None) -> dict:
     tok = token()
     if not tok:
-        raise SystemExit("no PLOW_CONNECTOR_TOKEN — run plow-agents login and mount ~/.config/plow/token")
+        raise SystemExit(
+            "no Plow token for connectors — connect Google at https://app.plow.co → Connectors"
+        )
     verb = method or ("GET" if action == "status" else "POST")
     url = f"{base()}/v1/connectors/gmail/{action}"
     headers = {"Authorization": f"Bearer {tok}", "Accept": "application/json"}

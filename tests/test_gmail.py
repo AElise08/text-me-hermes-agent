@@ -54,4 +54,19 @@ class GmailTests(unittest.TestCase):
         self.assertTrue(probe["gmail_send"])
         self.assertTrue(probe["gmail_read"])
         self.assertTrue(probe["calendar"])
-        self.assertIn("No Mac required", probe["advice"])
+        self.assertIn("No Latch, no Mac", probe["advice"])
+
+    def test_connectors_ignore_latch_for_gmail(self):
+        connectors = load("connectors_mod2", "scripts/connectors.py")
+        with patch.object(
+            connectors, "rest_status",
+            return_value={"ok": False, "path": "rest", "reason": "not connected"},
+        ):
+            with patch.object(
+                connectors, "latch_status",
+                return_value={"ok": True, "path": "latch", "reason": "relay answered"},
+            ):
+                probe = connectors.probe()
+        self.assertFalse(probe["gmail_send"])
+        self.assertFalse(probe["calendar"])
+        self.assertNotIn("Latch is up", probe["advice"])

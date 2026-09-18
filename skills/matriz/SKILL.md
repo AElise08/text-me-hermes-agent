@@ -14,10 +14,12 @@ metadata:
 Use when the person dumps tasks, asks what to do first, wants a time block,
 forwards a link that gates a later commitment, or should get the daily edition.
 
-First run: `python3 /var/lib/hermes/scripts/matriz.py profile show`. If
-`setup_done` is false, ask routine, city (save timezone), interests/avoid,
-delivery (kindle / printer / email / message) and the hour the page should
-be in their hand. Infer work, life, readings, and
+First run: `python3 /var/lib/hermes/scripts/matriz.py profile show`. Then
+`connectors.py`, `gcal.py today`, `gmail.py list` — look before asking.
+A greeting is a language, not an interview. If `setup_done` is false, learn
+routine, city (save timezone), interests/avoid, delivery and hour **from what
+they say**, across turns, not as three questions on "hi". Infer work, life,
+readings, and
 hobbies from what they say; persist with `learn add`. Payment mail is
 always a morning reminder. Persist with `profile set`. If they want a
 daily editorial cartoon, `profile set --charge yes`.

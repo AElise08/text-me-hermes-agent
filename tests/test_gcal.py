@@ -21,9 +21,36 @@ class GcalTests(unittest.TestCase):
         with patch.dict(os.environ, {"PLOW_CONNECTOR_TOKEN": "acct-test"}, clear=False):
             self.assertEqual(gcal.token(), "acct-test")
 
+    def test_token_falls_back_to_agent(self):
+        gcal = load_gcal()
+        env = {
+            k: v
+            for k, v in os.environ.items()
+            if k
+            not in {
+                "PLOW_CONNECTOR_TOKEN",
+                "PLOW_CONNECTOR_TOKEN_FILE",
+                "PLOW_AGENT_TOKEN",
+                "PLOW_CHAT_TOKEN",
+            }
+        }
+        env["PLOW_AGENT_TOKEN"] = "agt-cloud"
+        with patch.dict(os.environ, env, clear=True):
+            self.assertEqual(gcal.token(), "agt-cloud")
+
     def test_token_ignores_home_file(self):
         gcal = load_gcal()
-        env = {k: v for k, v in os.environ.items() if k not in {"PLOW_CONNECTOR_TOKEN", "PLOW_CONNECTOR_TOKEN_FILE"}}
+        env = {
+            k: v
+            for k, v in os.environ.items()
+            if k
+            not in {
+                "PLOW_CONNECTOR_TOKEN",
+                "PLOW_CONNECTOR_TOKEN_FILE",
+                "PLOW_AGENT_TOKEN",
+                "PLOW_CHAT_TOKEN",
+            }
+        }
         with patch.dict(os.environ, env, clear=True):
             self.assertEqual(gcal.token(), "")
 
