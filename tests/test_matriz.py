@@ -375,7 +375,7 @@ class MatrixTests(unittest.TestCase):
                     {"text": "Estudar mecânica dos fluidos", "planned_minutes": 110, "status": "open"}
                 ],
             },
-            datetime.now(timezone.utc),
+            datetime(2026, 9, 17, 12, tzinfo=timezone.utc),
         )
         self.assertIn("## Hoje em uma frase", md)
         self.assertLessEqual(md.count("mecânica dos fluidos"), 2)
