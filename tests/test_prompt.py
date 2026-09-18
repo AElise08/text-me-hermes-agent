@@ -18,6 +18,8 @@ class PromptTests(unittest.TestCase):
         self.assertIn("A acompanhar", soul)
         self.assertIn("Only when the first message carries no words at all", soul)
         self.assertIn("Never English and Portuguese", soul)
+        self.assertIn("not Portuguese-only", soul)
+        self.assertIn("Do not assume their country", soul)
         self.assertIn("same turn", soul)
         self.assertIn("Do not ask what is most important", soul)
         self.assertNotIn("stay bilingual", soul)
@@ -80,6 +82,9 @@ class SeparationAndNudgeTests(unittest.TestCase):
         self.assertIn("people add", soul)
         self.assertIn("conflicts", soul)
         self.assertIn("Toda terça", soul)
+        self.assertIn("One connected account is zero-setup", soul)
+        self.assertIn("matriz.py google add", soul)
+        self.assertIn("gcal.py status", soul)
 
 
 if __name__ == "__main__":

@@ -186,6 +186,8 @@ def add_slot(
     end: str,
     kind: str = "commitment",
     recurrence: list | None = None,
+    calendar_id: str = "",
+    account: str = "",
 ) -> dict:
     """Put a named interval on the calendar: class, physio, the free window — all of them."""
     text = text.strip()
@@ -221,6 +223,7 @@ def add_slot(
         item["recurrence"] = list(recurrence)
     if gcal_mod.token():
         try:
+            calendar_account, target_calendar = accounts_mod.route(account, calendar_id)
             created = gcal_mod.create(
                 text,
                 start_dt.isoformat(),
@@ -228,8 +231,12 @@ def add_slot(
                 description="text-me",
                 meet=gcal_mod.wants_meet(text),
                 recurrence=list(recurrence or []),
+                calendar_id=target_calendar,
+                account=calendar_account,
             )
             item["calendar"] = created.get("data") or created
+            item["calendar_account"] = calendar_account
+            item["calendar_id"] = target_calendar
             if created.get("hangout"):
                 item["hangout"] = created["hangout"]
         except SystemExit as exc:
@@ -423,6 +430,8 @@ def parse() -> argparse.Namespace:
     start.add_argument("--text", required=True)
     start.add_argument("--minutes", type=int, required=True)
     start.add_argument("--when", default="")
+    start.add_argument("--calendar-id", default="")
+    start.add_argument("--account", default="")
     extend = block_sub.add_parser("extend")
     extend.add_argument("id")
     extend.add_argument("--minutes", type=int, required=True)
@@ -449,11 +458,15 @@ def parse() -> argparse.Namespace:
     add_s.add_argument("--start", required=True)
     add_s.add_argument("--end", required=True)
     add_s.add_argument("--kind", default="commitment")
+    add_s.add_argument("--calendar-id", default="")
+    add_s.add_argument("--account", default="")
     slot_sub.add_parser("list")
 
     day_p = sub.add_parser("day")
     day_p.add_argument("--text", required=True, help="The person's dump of the day, with clock times")
     day_p.add_argument("--date", default="", help="YYYY-MM-DD, default tomorrow if they said amanhã")
+    day_p.add_argument("--calendar-id", default="")
+    day_p.add_argument("--account", default="")
 
     edition = sub.add_parser("edition")
     edition.add_argument("--title", default="")
@@ -605,14 +618,16 @@ def main() -> None:
             dump({"account": row, "google": google})
             return
         if args.action == "default":
-            account = args.account.strip().casefold()
+            chosen = accounts_mod.configured_account(args.account)
+            account = str(chosen.get("account") or args.account).strip().casefold()
             if not any(row.get("account") == account for row in google.get("accounts") or []):
                 raise SystemExit("add the Google account before making it the default")
             google["default_account"] = account
             google["default_calendar_id"] = args.calendar_id.strip() or "primary"
             save(data)
         if args.action == "audit":
-            dump({"audit": accounts_mod.audit(args.account)})
+            chosen = accounts_mod.configured_account(args.account)
+            dump({"audit": accounts_mod.audit(str(chosen.get("account") or args.account))})
             return
         dump({"google": google})
         return
@@ -660,8 +675,13 @@ def main() -> None:
                         end.isoformat(),
                         description="text-me focus block",
                         meet=gcal_mod.wants_meet(args.text),
+                        calendar_id=args.calendar_id,
+                        account=args.account,
                     )
                     block["calendar"] = created.get("data") or created
+                    block["calendar_account"], block["calendar_id"] = accounts_mod.route(
+                        args.account, args.calendar_id
+                    )
                     if created.get("hangout"):
                         block["hangout"] = created["hangout"]
                 except SystemExit as exc:
@@ -686,8 +706,11 @@ def main() -> None:
                     end = start + timedelta(minutes=total)
                     gcal_mod.update(
                         calendar["id"],
-                        calendar.get("calendar_id") or calendar.get("calendarId") or "primary",
-                        calendar.get("account") or "",
+                        block.get("calendar_id")
+                        or calendar.get("calendar_id")
+                        or calendar.get("calendarId")
+                        or "",
+                        block.get("calendar_account") or calendar.get("account") or "",
                         start=start.isoformat(),
                         end=end.isoformat(),
                     )
@@ -755,7 +778,15 @@ def main() -> None:
         if args.action == "list":
             dump({"slots": data.get("slots") or []})
             return
-        out = add_slot(data, args.text, args.start, args.end, args.kind)
+        out = add_slot(
+            data,
+            args.text,
+            args.start,
+            args.end,
+            args.kind,
+            calendar_id=args.calendar_id,
+            account=args.account,
+        )
         save(data)
         dump(out)
         return
@@ -779,6 +810,8 @@ def main() -> None:
                 item["start"],
                 item["end"],
                 recurrence=item.get("recurrence") or [],
+                calendar_id=args.calendar_id,
+                account=args.account,
             )
             if row.get("created"):
                 created.append(row["created"])
@@ -787,7 +820,7 @@ def main() -> None:
         existing = []
         if gcal_mod.token():
             try:
-                existing = gcal_mod.events_on(day)
+                existing = gcal_mod.events_on(day, args.calendar_id, args.account)
             except SystemExit:
                 existing = []
         clashes = day_mod.conflicts(planned, existing)

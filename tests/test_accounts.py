@@ -41,3 +41,29 @@ class AccountTests(unittest.TestCase):
                 row = accounts.audit("school@example.edu")[0]
         self.assertEqual(row["account_label"], "School")
         self.assertEqual(row["resource_id"], "evt1")
+
+    def test_routes_a_friendly_account_label_to_its_calendar(self):
+        with tempfile.TemporaryDirectory() as home:
+            state = Path(home) / ".matriz" / "state.json"
+            state.parent.mkdir()
+            state.write_text(
+                json.dumps(
+                    {
+                        "profile": {
+                            "google": {
+                                "accounts": [
+                                    {
+                                        "account": "school@example.edu",
+                                        "label": "Faculty",
+                                        "calendar_id": "classes",
+                                    }
+                                ]
+                            }
+                        }
+                    }
+                ),
+                encoding="utf-8",
+            )
+            with patch.dict(os.environ, {"HERMES_HOME": home}, clear=False):
+                accounts = load()
+                self.assertEqual(accounts.route("Faculty"), ("school@example.edu", "classes"))

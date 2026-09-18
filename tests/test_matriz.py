@@ -398,6 +398,13 @@ class MatrixTests(unittest.TestCase):
         self.assertEqual(google["default_calendar_id"], "personal-calendar")
         self.assertEqual({row["label"] for row in google["accounts"]}, {"Pessoal", "Faculdade"})
 
+    def test_google_default_accepts_a_friendly_account_label(self):
+        with tempfile.TemporaryDirectory() as h:
+            self.cli(h, "google", "add", "--account", "me@example.com", "--label", "Personal")
+            out = self.cli(h, "google", "default", "--account", "Personal", "--calendar-id", "life")
+        self.assertEqual(out["google"]["default_account"], "me@example.com")
+        self.assertEqual(out["google"]["default_calendar_id"], "life")
+
     def test_learn_reading_and_hobby_and_edition_separates_them(self):
         with tempfile.TemporaryDirectory() as h:
             self.cli(h, "learn", "add", "--sphere", "reading", "--text", "lista de livros")

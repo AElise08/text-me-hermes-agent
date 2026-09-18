@@ -14,9 +14,10 @@ Index listing are **text-me**.
 
 First text is not an interview. "hi" / "oi" already has a language — it
 replies in **that** language only, checks Plow Connectors (Gmail + Calendar,
-no Latch), and proposes one next step from what it found. If they later write
-in Portuguese, it stays in Portuguese. If mail, calendar, and the list are
-empty, that first reply is:
+no Latch), and proposes one next step from what it found. Portuguese and
+English are first-class; it follows any later language switch and does not
+assume a country from the language. If mail, calendar, and the list are empty,
+that first reply is:
 
 **Send me everything on your plate. I'll sort life from work, tell you what comes first, and keep mail and the calendar in view.**
 
@@ -202,15 +203,18 @@ work over REST: mount `~/.config/plow/token` (from `plow-agents login`) into
 the container. Latch is optional. `connectors.py` / `gcal.py status` should
 show `connected: true`.
 
-If you connect more than one Google account, name each one and choose the
-default destination before the agent writes anything. The same setup works for
-personal, school, work, or an agent mailbox; every calendar or mail write is
-recorded locally by account so you can inspect it later.
+Google accounts are connected in Plow, not in text-me. With one connected
+account, there is nothing else to configure: text-me uses Plow's default
+account and `primary` calendar. With more than one, tell the agent once what
+each account is for and which calendar should receive new events; it saves the
+friendly names and default destination. The commands below are available for
+manual setup and inspection, but are not an authentication flow. Calendar
+writes are recorded locally by account so you can inspect them later.
 
 ```sh
 # Add each account after it appears in Connectors.
 python3 /var/lib/hermes/scripts/matriz.py google add --account me@example.com --label "Personal"
-python3 /var/lib/hermes/scripts/matriz.py google add --account school@example.edu --label "School" --calendar-id primary
+python3 /var/lib/hermes/scripts/matriz.py google add --account school@example.edu --label "Faculty" --calendar-id primary
 python3 /var/lib/hermes/scripts/matriz.py google default --account me@example.com --calendar-id primary
 
 # See the configured accounts and the latest writes by account.
@@ -218,8 +222,9 @@ python3 /var/lib/hermes/scripts/matriz.py google show
 python3 /var/lib/hermes/scripts/matriz.py google audit --account school@example.edu
 ```
 
-Use `--account` and `--calendar-id` on `gcal.py` when a one-off event belongs
-somewhere else. Plow currently supports mailbox selection only for Calendar;
+Use `--account "Personal"` or `--account "Faculty"` and `--calendar-id` on
+`gcal.py` or `matriz.py day` when an event belongs somewhere else. Plow
+currently supports mailbox selection only for Calendar;
 Gmail uses the Plow connector's default mailbox and refuses an account override
 instead of silently reading or sending from the wrong address.
 

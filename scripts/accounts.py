@@ -29,11 +29,26 @@ def settings() -> dict:
     }
 
 
+def configured_account(name: str = "") -> dict:
+    wanted = name.strip().casefold()
+    if not wanted:
+        return {}
+    for row in settings()["accounts"]:
+        account = str(row.get("account") or "").strip().casefold()
+        label = str(row.get("label") or "").strip().casefold()
+        if wanted in (account, label):
+            return row
+    return {}
+
+
 def route(account: str = "", calendar_id: str = "") -> tuple[str, str]:
     configured = settings()
+    chosen = configured_account(account)
+    address = str(chosen.get("account") or account or configured["default_account"]).strip().casefold()
+    calendar = calendar_id or chosen.get("calendar_id") or configured["default_calendar_id"]
     return (
-        (account or configured["default_account"]).strip().casefold(),
-        (calendar_id or configured["default_calendar_id"]).strip() or "primary",
+        address,
+        str(calendar).strip() or "primary",
     )
 
 
