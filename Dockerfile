@@ -1,4 +1,4 @@
-FROM public.ecr.aws/e1h7x4a2/plow-cloud-agents:base-db182f335c727469d7de4eaf25b5d333670b3069@sha256:bb2308bc96acd564b9ea0e9b8b577f19f39d6bb96173f29761f24297817d38ed
+FROM public.ecr.aws/e1h7x4a2/plow-cloud-agents:base-51f83158a70a383f03a4d03dbd8b6ea102cf0361@sha256:253d7ed3409effa7fa59113d93b4b79bb731d8264cdaf4cd60294924d0110a2e
 COPY runtime/SOUL.md /var/lib/hermes/SOUL.md
 COPY LICENSE NOTICE /usr/share/doc/matriz/
 COPY skills/matriz/ /opt/hermes/skills/matriz/
