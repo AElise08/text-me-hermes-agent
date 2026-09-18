@@ -2,8 +2,9 @@
 """Overnight mail → calendar proposal, or a yes sitting on the Kindle.
 
 A plain email that says "mudou para as 11h" is a proposal, not permission to
-move a real event. It lands under "needs your yes today". WhatsApp/iMessage
-to a personal number is invisible; Gmail and Calendar invites are not.
+move a real event. It lands under "needs your yes today". WhatsApp to a
+personal number is invisible; Gmail and Calendar invites are not. A Zap they
+paste into this chat is just another dump — treat it like mail.
 """
 from __future__ import annotations
 
@@ -188,8 +189,9 @@ def classify(msg: dict, events: list[dict], day: datetime, spheres: dict | None 
     lane = guess_lane(blob, spheres)
     sphere = lane if lane in ("work", "life") else ""
     base = {"text": line, "msg": msg, "sphere": sphere, "lane": lane, "important": False}
+    event = match_event(blob, events)
     if any(tag in sender or tag in blob.lower() for tag in GOOGLE_CAL):
-        return {**base, "kind": "already"}
+        return {**base, "kind": "already", "event": event}
     if PAY.search(blob):
         return {
             **base,
@@ -199,20 +201,38 @@ def classify(msg: dict, events: list[dict], day: datetime, spheres: dict | None 
             "why": "pay",
         }
     if ASK.search(blob):
-        return {**base, "kind": "approval", "important": True}
+        return {**base, "kind": "approval", "important": True, "event": event}
     when = _parse_time(blob, day)
     if CANCEL.search(blob) and not when:
-        return {**base, "kind": "approval", "important": True}
+        return {
+            **base,
+            "kind": "approval",
+            "important": True,
+            "action": "cancel",
+            "event": event,
+        }
     if when and MOVED.search(blob):
         # A plain email is untrusted input: it can be mistaken, forwarded, or
         # malicious.  The list connector does not expose a signed Calendar
         # event revision, so it is not enough evidence to move a real event.
         # Keep the proposed change visible and let the owner approve it in the
-        # chat. Structured Calendar updates can be wired here later using an
-        # event id + revision from the connector.
-        return {**base, "kind": "approval", "important": True, "proposed_when": when.isoformat()}
+        # chat. After they say ok / tá bom / sim, `gcal.py move` applies it.
+        return {
+            **base,
+            "kind": "approval",
+            "important": True,
+            "proposed_when": when.isoformat(),
+            "action": "move",
+            "event": event,
+        }
     if MOVED.search(blob) or CANCEL.search(blob):
-        return {**base, "kind": "approval", "important": True}
+        return {
+            **base,
+            "kind": "approval",
+            "important": True,
+            "action": "cancel" if CANCEL.search(blob) else "move",
+            "event": event,
+        }
     waiting = WAITING.search(blob) or any(k in blob.lower() for k in ("re:", "fwd:"))
     if waiting and (sphere or lane in ("reading", "hobby")):
         return {
@@ -239,19 +259,29 @@ def apply_move(event: dict, when: datetime) -> dict:
     start = _start(event) or when
     duration = _end(event, start) - start
     new_end = when + duration
-    calendar_id = event.get("calendar_id") or "primary"
-    account = event.get("account") or ""
-    gcal_mod.update(
+    gcal_mod.move(
         event["id"],
-        calendar_id,
-        account,
-        start=when.isoformat(),
-        end=new_end.isoformat(),
+        when.isoformat(),
+        new_end.isoformat(),
+        event.get("calendar_id") or "primary",
+        event.get("account") or "",
     )
     event["start"] = when.isoformat()
     event["end"] = new_end.isoformat()
     return {
         "text": f"{event.get('summary')} → {when.strftime('%H:%M')}",
+        "event_id": event.get("id"),
+    }
+
+
+def apply_cancel(event: dict) -> dict:
+    gcal_mod.cancel(
+        event["id"],
+        event.get("calendar_id") or "primary",
+        event.get("account") or "",
+    )
+    return {
+        "text": event.get("summary") or event.get("id"),
         "event_id": event.get("id"),
     }
 
@@ -293,6 +323,7 @@ def run(
         who = sender.split("<")[0].strip().strip('"')
         if "@" in who and "." in who:
             who = who.split("@")[0]
+        event = item.get("event") or {}
         row = {
             "text": item["text"],
             "summary": snippet[:160] if snippet.casefold() != item["text"].casefold() else "",
@@ -301,6 +332,11 @@ def run(
             "why": item.get("why") or "",
             "who": who,
             "proposed_when": item.get("proposed_when") or "",
+            "action": item.get("action") or "",
+            "event_id": event.get("id") or "",
+            "calendar_id": event.get("calendar_id") or event.get("calendarId") or "",
+            "account": event.get("account") or "",
+            "msg_id": msg.get("id") or "",
         }
         if item["kind"] == "move" and apply:
             try:

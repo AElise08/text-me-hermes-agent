@@ -68,6 +68,18 @@ class SeparationAndNudgeTests(unittest.TestCase):
         self.assertIn("extra-file", soul)
         self.assertIn("researches their interests itself", soul)
         self.assertIn("profile set --charge yes", soul)
+        self.assertIn("--meet", soul)
+        self.assertIn("hangout", soul)
+        self.assertIn("gmail.py reply", soul)
+        self.assertIn("gmail.py draft", soul)
+        self.assertIn("send-draft", soul)
+        self.assertIn("envia", soul)
+        self.assertIn("gcal.py move", soul)
+        self.assertIn("gcal.py cancel", soul)
+        self.assertIn("WhatsApp is invisible", soul)
+        self.assertIn("people add", soul)
+        self.assertIn("conflicts", soul)
+        self.assertIn("Toda terça", soul)
 
 
 if __name__ == "__main__":

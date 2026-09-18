@@ -22,6 +22,7 @@ import edition as edition_mod  # noqa: E402
 import gcal as gcal_mod  # noqa: E402
 import gmail as gmail_mod  # noqa: E402
 import overnight as overnight_mod  # noqa: E402
+import people as people_mod  # noqa: E402
 import printer as printer_mod  # noqa: E402
 import research as research_mod  # noqa: E402
 
@@ -82,6 +83,7 @@ def blank() -> dict:
         "blocks": [],
         "commitments": [],
         "known": {lane: [] for lane in LANES},
+        "people": [],
         "slots": [],
     }
 
@@ -101,6 +103,7 @@ def load() -> dict:
     data.setdefault("commitments", [])
     data.setdefault("slots", [])
     data.setdefault("known", {lane: [] for lane in LANES})
+    data.setdefault("people", [])
     for lane in LANES:
         data["known"].setdefault(lane, [])
     for task in data.setdefault("tasks", []):
@@ -173,7 +176,14 @@ def _stamp_key(value: str) -> str:
         return (value or "")[:16]
 
 
-def add_slot(data: dict, text: str, start: str, end: str, kind: str = "commitment") -> dict:
+def add_slot(
+    data: dict,
+    text: str,
+    start: str,
+    end: str,
+    kind: str = "commitment",
+    recurrence: list | None = None,
+) -> dict:
     """Put a named interval on the calendar: class, physio, the free window — all of them."""
     text = text.strip()
     start_dt = _aware(start)
@@ -195,6 +205,8 @@ def add_slot(data: dict, text: str, start: str, end: str, kind: str = "commitmen
         "status": "open",
         "calendar": None,
     }
+    if recurrence:
+        item["recurrence"] = list(recurrence)
     if gcal_mod.token():
         try:
             created = gcal_mod.create(
@@ -202,8 +214,12 @@ def add_slot(data: dict, text: str, start: str, end: str, kind: str = "commitmen
                 start_dt.isoformat(),
                 end_dt.isoformat(),
                 description="text-me",
+                meet=gcal_mod.wants_meet(text),
+                recurrence=list(recurrence or []),
             )
             item["calendar"] = created.get("data") or created
+            if created.get("hangout"):
+                item["hangout"] = created["hangout"]
         except SystemExit as exc:
             item["calendar_error"] = str(exc)
     data["slots"].append(item)
@@ -353,6 +369,18 @@ def parse() -> argparse.Namespace:
     add_k.add_argument("--text", required=True)
     add_k.add_argument("--source", default="chat")
     known_sub.add_parser("show")
+
+    who = sub.add_parser("people")
+    who_sub = who.add_subparsers(dest="action", required=True)
+    add_p = who_sub.add_parser("add")
+    add_p.add_argument("--name", required=True)
+    add_p.add_argument("--email", default="")
+    add_p.add_argument("--alias", default="")
+    who_sub.add_parser("show")
+    find_p = who_sub.add_parser("find")
+    find_p.add_argument("--name", required=True)
+    mail_p = who_sub.add_parser("emails")
+    mail_p.add_argument("--text", required=True)
 
     dur = sub.add_parser("duration")
     dur_sub = dur.add_subparsers(dest="action", required=True)
@@ -525,6 +553,22 @@ def main() -> None:
         dump({"known": data.get("known") or {lane: [] for lane in LANES}})
         return
 
+    if args.cmd == "people":
+        data.setdefault("people", [])
+        if args.action == "add":
+            person = people_mod.upsert(data["people"], args.name, args.email, args.alias)
+            save(data)
+            dump({"person": person, "people": data["people"]})
+            return
+        if args.action == "find":
+            dump({"people": people_mod.find(data["people"], args.name)})
+            return
+        if args.action == "emails":
+            dump({"emails": people_mod.emails_for(args.text, data["people"])})
+            return
+        dump({"people": data["people"]})
+        return
+
     if args.cmd == "duration":
         key = duration_mod.key(args.activity)
         entry = data["durations"].get(key) or {}
@@ -567,8 +611,11 @@ def main() -> None:
                         start.isoformat(),
                         end.isoformat(),
                         description="text-me focus block",
+                        meet=gcal_mod.wants_meet(args.text),
                     )
                     block["calendar"] = created.get("data") or created
+                    if created.get("hangout"):
+                        block["hangout"] = created["hangout"]
                 except SystemExit as exc:
                     block["calendar_error"] = str(exc)
             data["blocks"].append(block)
@@ -678,13 +725,34 @@ def main() -> None:
         planned = day_mod.parse(args.text, day)
         created, skipped = [], []
         for item in planned:
-            row = add_slot(data, item["text"], item["start"], item["end"])
+            row = add_slot(
+                data,
+                item["text"],
+                item["start"],
+                item["end"],
+                recurrence=item.get("recurrence") or [],
+            )
             if row.get("created"):
                 created.append(row["created"])
             else:
                 skipped.append(row)
+        existing = []
+        if gcal_mod.token():
+            try:
+                existing = gcal_mod.events_on(day)
+            except SystemExit:
+                existing = []
+        clashes = day_mod.conflicts(planned, existing)
         save(data)
-        dump({"date": day.date().isoformat(), "planned": planned, "created": created, "skipped": skipped})
+        dump(
+            {
+                "date": day.date().isoformat(),
+                "planned": planned,
+                "created": created,
+                "skipped": skipped,
+                "conflicts": clashes,
+            }
+        )
         return
 
     if args.cmd == "edition":
@@ -695,7 +763,7 @@ def main() -> None:
             try:
                 report = overnight_mod.run(
                     avoid=profile.get("avoid") or [],
-                    apply=not args.no_send,
+                    apply=False,
                     state=data,
                 )
             except SystemExit:

@@ -36,19 +36,29 @@ python3 /var/lib/hermes/scripts/matriz.py learn add --sphere work --text "follow
 python3 /var/lib/hermes/scripts/matriz.py learn add --sphere reading --text "lista de livros"
 python3 /var/lib/hermes/scripts/matriz.py learn add --sphere hobby --text "piano"
 python3 /var/lib/hermes/scripts/matriz.py learn show
+python3 /var/lib/hermes/scripts/matriz.py people add --name Ana --email ana@x.com
+python3 /var/lib/hermes/scripts/matriz.py people find --name Ana
 python3 /var/lib/hermes/scripts/research.py --interests "IA" --avoid "economia" --language de
 python3 /var/lib/hermes/scripts/gmail.py list
 python3 /var/lib/hermes/scripts/gmail.py get MESSAGE_ID
+python3 /var/lib/hermes/scripts/gmail.py draft --id MESSAGE_ID --body "..."
+python3 /var/lib/hermes/scripts/gmail.py drafts
+python3 /var/lib/hermes/scripts/gmail.py send-draft --id DRAFT_ID
 python3 /var/lib/hermes/scripts/gmail.py kindle --to name@kindle.com --epub PATH
 python3 /var/lib/hermes/scripts/overnight.py --no-apply
 python3 /var/lib/hermes/scripts/matriz.py day --text "class at 7:30, free between 9:20 and 11:10, gym at 3 until 4:20"
 python3 /var/lib/hermes/scripts/gcal.py on --date 2026-09-17
+python3 /var/lib/hermes/scripts/gcal.py create --summary "call" --start "..." --end "..." --meet --to ana@x.com
+python3 /var/lib/hermes/scripts/gcal.py move --id EVENT_ID --start "..."
+python3 /var/lib/hermes/scripts/gcal.py cancel --id EVENT_ID
 python3 /var/lib/hermes/scripts/printer.py probe
 ```
 
 Clock times they already have go through **one** `matriz.py day --text "..."` —
-their full message, every interval, whoever they are. Never `block start` for
-only the gap. Latch is optional; REST is enough. Focus blocks you invent still
+their full message, every interval, whoever they are. Weekly dumps ("toda
+terça", "every Tuesday") land as recurring Google events. If `conflicts` is
+set, tell them the overlap in chat; still keep what they named. Never
+`block start` for only the gap. Latch is optional; REST is enough. Focus blocks you invent still
 need "ok" / "tá bom" / "sim", then `block start`.
 Extensions ("mais 20") are how duration is learned. `block close` writes the
 sample. Next `duration suggest` uses the median actual, not the guess.

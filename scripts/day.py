@@ -53,11 +53,14 @@ def _at(day: datetime, h: int, m: int, period: str = "", prev: datetime | None =
     return day.replace(hour=h, minute=m, second=0, microsecond=0)
 
 
-def _label(window: str) -> str:
-    """Use the words they used, not a fixed school/physio vocabulary."""
-    before = re.split(r"\d", window, maxsplit=1)[0]
-    tokens = re.findall(r"[A-Za-zÀ-ÿ]{3,}", before)
+def _label(prefix: str) -> str:
+    """Words glued to this clock, not a previous interval in the lookback."""
+    after = re.split(r"\d+(?:[:hH]\d{2})?\s*(?:h|hrs?)?", prefix or "")[-1]
+    tokens = re.findall(r"[A-Za-zÀ-ÿ]{3,}", after)
     keep = [t for t in tokens if t.casefold() not in STOP]
+    if not keep:
+        tokens = re.findall(r"[A-Za-zÀ-ÿ]{3,}", prefix or "")
+        keep = [t for t in tokens if t.casefold() not in STOP]
     if not keep:
         return "Busy"
     return " ".join(keep[-2:]).strip().capitalize()
@@ -68,14 +71,89 @@ def _covered(index: int, spans: list[tuple[int, int]]) -> bool:
 
 
 def _period(*parts: str | None) -> str:
-    return " ".join(p for p in parts if p) 
+    return " ".join(p for p in parts if p)
+
+
+DAY_NAMES = (
+    (r"segunda(?:s|-feiras?)?", "MO"),
+    (r"ter[cç]a(?:s|-feiras?)?", "TU"),
+    (r"quarta(?:s|-feiras?)?", "WE"),
+    (r"quinta(?:s|-feiras?)?", "TH"),
+    (r"sexta(?:s|-feiras?)?", "FR"),
+    (r"s[aá]bado(?:s)?", "SA"),
+    (r"domingo(?:s)?", "SU"),
+    (r"mondays?", "MO"),
+    (r"tuesdays?", "TU"),
+    (r"wednesdays?", "WE"),
+    (r"thursdays?", "TH"),
+    (r"fridays?", "FR"),
+    (r"saturdays?", "SA"),
+    (r"sundays?", "SU"),
+)
+_PY_DAY = {"MO": 0, "TU": 1, "WE": 2, "TH": 3, "FR": 4, "SA": 5, "SU": 6}
+
+
+def weekday_codes(text: str) -> list[str]:
+    seen: list[str] = []
+    blob = text or ""
+    for pattern, code in DAY_NAMES:
+        if re.search(rf"\b{pattern}\b", blob, re.I) and code not in seen:
+            seen.append(code)
+    return seen
+
+
+def wants_weekly(text: str, codes: list[str]) -> bool:
+    blob = text or ""
+    if re.search(r"\b(tod[oa]s?|every|each)\b", blob, re.I):
+        return True
+    if len(codes) >= 2:
+        return True
+    if re.search(
+        r"\b(?:segundas|ter[cç]as|quartas|quintas|sextas|s[aá]bados|domingos|"
+        r"mondays|tuesdays|wednesdays|thursdays|fridays|saturdays|sundays)\b",
+        blob,
+        re.I,
+    ):
+        return True
+    return False
+
+
+def recurrence_for(text: str) -> list[str]:
+    codes = weekday_codes(text)
+    if not wants_weekly(text, codes):
+        return []
+    if codes:
+        return [f"RRULE:FREQ=WEEKLY;BYDAY={','.join(codes)}"]
+    if re.search(r"\b(semanas?|weeks?)\b", text or "", re.I):
+        return ["RRULE:FREQ=WEEKLY"]
+    return []
+
+
+def snap_week(start: datetime, end: datetime, codes: list[str]) -> tuple[datetime, datetime]:
+    if not codes:
+        return start, end
+    want = [_PY_DAY[c] for c in codes if c in _PY_DAY]
+    if not want:
+        return start, end
+    length = end - start
+    base = start.replace(hour=0, minute=0, second=0, microsecond=0)
+    for i in range(8):
+        cand = base + timedelta(days=i)
+        if cand.weekday() in want:
+            new_start = start.replace(year=cand.year, month=cand.month, day=cand.day)
+            return new_start, new_start + length
+    return start, end
+
+
+def _window(text: str, start: int, end: int) -> str:
+    return text[max(0, start - 60) : min(len(text), end + 40)]
 
 
 def parse(text: str, day: datetime) -> list[dict]:
     """Named intervals in order. Lone starts close at the next clock or +60m."""
     text = text or ""
     day = day.replace(hour=0, minute=0, second=0, microsecond=0)
-    hits: list[tuple[datetime, datetime, str]] = []
+    hits: list[tuple[datetime, datetime, str, list[str]]] = []
     spans: list[tuple[int, int]] = []
 
     for match in RANGE.finditer(text):
@@ -87,8 +165,13 @@ def parse(text: str, day: datetime) -> list[dict]:
             end = _at(day, int(match.group(4)), int(match.group(5) or 0), "tarde", start)
         if end <= start:
             end = start + timedelta(minutes=60)
-        around = text[max(0, match.start() - 50) : match.end() + 8]
-        hits.append((start, end, _label(around)))
+        around = _window(text, match.start(), match.end())
+        rec = recurrence_for(around)
+        if rec:
+            codes = weekday_codes(around)
+            start, end = snap_week(start, end, codes)
+        prefix = text[max(0, match.start() - 40) : match.start()]
+        hits.append((start, end, _label(prefix), rec))
         spans.append((match.start(), match.end()))
 
     for match in HOUR.finditer(text):
@@ -97,12 +180,15 @@ def parse(text: str, day: datetime) -> list[dict]:
         prefix = text[max(0, match.start() - 12) : match.start()]
         if re.search(r"(?:at[eé]|until|till)\s+(?:umas?\s+)?$", prefix, re.I):
             continue
-        around = text[max(0, match.start() - 40) : match.end() + 8]
+        around = _window(text, match.start(), match.end())
         if not re.search(r"[A-Za-zÀ-ÿ]{3,}", around):
             continue
         period = match.group(4) or ""
         start = _at(day, int(match.group(1)), int(match.group(2) or 0), period)
-        until = UNTIL.search(text[match.end() : match.end() + 180])
+        rest = text[match.end() : match.end() + 180]
+        until = UNTIL.search(rest)
+        if until and (HOUR.search(rest[: until.start()]) or RANGE.search(rest[: until.start()])):
+            until = None
         if until:
             end = _at(
                 day,
@@ -113,26 +199,95 @@ def parse(text: str, day: datetime) -> list[dict]:
             )
         else:
             end = start + timedelta(minutes=60)
-        hits.append((start, end, _label(around)))
+        rec = recurrence_for(around)
+        if rec:
+            start, end = snap_week(start, end, weekday_codes(around))
+        title = _label(text[max(0, match.start() - 40) : match.start()])
+        hits.append((start, end, title, rec))
 
     hits.sort(key=lambda item: item[0])
-    closed: list[tuple[datetime, datetime, str]] = []
-    for i, (start, end, label) in enumerate(hits):
+    closed: list[tuple[datetime, datetime, str, list[str]]] = []
+    for i, (start, end, label, rec) in enumerate(hits):
         if end == start + timedelta(minutes=60) and i + 1 < len(hits):
             nxt = hits[i + 1][0]
             if start < nxt <= start + timedelta(hours=4):
                 end = nxt
-        closed.append((start, end, label))
+        closed.append((start, end, label, rec))
 
     merged: list[dict] = []
-    for start, end, label in closed:
+    for start, end, label, rec in closed:
         if merged:
             prev_end = datetime.fromisoformat(merged[-1]["end"])
             if start < prev_end and label.casefold() == merged[-1]["text"].casefold():
                 if end > prev_end:
                     merged[-1]["end"] = end.isoformat()
+                if rec and not merged[-1].get("recurrence"):
+                    merged[-1]["recurrence"] = rec
                 continue
         if end <= start:
             continue
-        merged.append({"text": label, "start": start.isoformat(), "end": end.isoformat()})
+        item = {"text": label, "start": start.isoformat(), "end": end.isoformat()}
+        if rec:
+            item["recurrence"] = rec
+        merged.append(item)
     return merged
+
+
+def _when(value: str) -> datetime | None:
+    raw = str(value or "")
+    if "T" not in raw:
+        return None
+    try:
+        return datetime.fromisoformat(raw.replace("Z", "+00:00"))
+    except ValueError:
+        return None
+
+
+def overlaps(a: dict, b: dict) -> bool:
+    a0, a1 = _when(a.get("start") or ""), _when(a.get("end") or "")
+    b0, b1 = _when(b.get("start") or ""), _when(b.get("end") or "")
+    if not all((a0, a1, b0, b1)):
+        return False
+    return a0 < b1 and b0 < a1
+
+
+def _stamp_min(item: dict) -> str:
+    when = _when(item.get("start") or "")
+    return when.strftime("%Y-%m-%dT%H:%M") if when else str(item.get("start") or "")[:16]
+
+
+def conflicts(planned: list[dict], existing: list[dict] | None = None) -> list[dict]:
+    """Overlaps inside the dump, or against events already on the calendar."""
+    out: list[dict] = []
+    items = list(planned or [])
+    for i, a in enumerate(items):
+        for b in items[i + 1 :]:
+            if overlaps(a, b):
+                out.append(
+                    {
+                        "new": a.get("text") or "",
+                        "existing": b.get("text") or "",
+                        "kind": "dump",
+                    }
+                )
+    for a in items:
+        for raw in existing or []:
+            other = {
+                "start": raw.get("start"),
+                "end": raw.get("end"),
+                "text": raw.get("summary") or raw.get("text") or "",
+            }
+            if not overlaps(a, other):
+                continue
+            if _stamp_min(a) == _stamp_min(other) and (a.get("text") or "").casefold() == (
+                other.get("text") or ""
+            ).casefold():
+                continue
+            out.append(
+                {
+                    "new": a.get("text") or "",
+                    "existing": other.get("text") or "",
+                    "kind": "calendar",
+                }
+            )
+    return out

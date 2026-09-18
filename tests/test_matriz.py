@@ -295,6 +295,55 @@ class MatrixTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as h:
             out = self.cli(h, "day", "--date", "2026-09-17", "--text", text)
             self.assertGreaterEqual(len(out["created"]), 3)
+            self.assertEqual(out["conflicts"], [])
+
+    def test_weekly_dump_snaps_to_weekday_and_sets_rrule(self):
+        import importlib.util
+        spec = importlib.util.spec_from_file_location("day", ROOT / "scripts" / "day.py")
+        day = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(day)
+        thursday = datetime(2026, 9, 17, tzinfo=timezone.utc).astimezone().replace(
+            hour=0, minute=0, second=0, microsecond=0
+        )
+        slots = day.parse("toda terça aula às 7h30 até 9h20", thursday)
+        self.assertEqual(len(slots), 1)
+        self.assertTrue(slots[0]["start"].startswith("2026-09-22T07:30"))
+        self.assertEqual(slots[0]["recurrence"], ["RRULE:FREQ=WEEKLY;BYDAY=TU"])
+
+    def test_dump_overlap_is_a_conflict(self):
+        import importlib.util
+        spec = importlib.util.spec_from_file_location("day", ROOT / "scripts" / "day.py")
+        day = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(day)
+        planned = [
+            {"text": "Aula", "start": "2026-09-17T07:30:00-03:00", "end": "2026-09-17T09:20:00-03:00"},
+            {"text": "Gym", "start": "2026-09-17T09:00:00-03:00", "end": "2026-09-17T10:00:00-03:00"},
+        ]
+        clashes = day.conflicts(planned)
+        self.assertEqual(clashes[0]["kind"], "dump")
+        self.assertEqual(clashes[0]["new"], "Aula")
+        existing = [{"summary": "Call", "start": "2026-09-17T09:00:00-03:00", "end": "2026-09-17T09:30:00-03:00"}]
+        cal = day.conflicts([planned[1]], existing)
+        self.assertEqual(cal[0]["kind"], "calendar")
+        self.assertEqual(cal[0]["existing"], "Call")
+        short = day.parse(
+            "aula das 7h30 até 9h20 e academia das 9h até 10h",
+            datetime(2026, 9, 17, tzinfo=timezone.utc).astimezone().replace(
+                hour=0, minute=0, second=0, microsecond=0
+            ),
+        )
+        self.assertGreaterEqual(len(short), 2)
+        self.assertTrue(any("aula" in (s["text"] or "").casefold() for s in short))
+        self.assertTrue(any("academia" in (s["text"] or "").casefold() for s in short))
+        self.assertTrue(day.conflicts(short))
+
+    def test_people_cli_saves_and_resolves(self):
+        with tempfile.TemporaryDirectory() as h:
+            self.cli(h, "people", "add", "--name", "Ana", "--email", "ana@x.com")
+            found = self.cli(h, "people", "find", "--name", "Ana")["people"]
+            self.assertEqual(found[0]["email"], "ana@x.com")
+            mails = self.cli(h, "people", "emails", "--text", "call with Ana")["emails"]
+            self.assertEqual(mails, ["ana@x.com"])
 
     def test_learn_reading_and_hobby_and_edition_separates_them(self):
         with tempfile.TemporaryDirectory() as h:

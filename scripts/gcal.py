@@ -8,6 +8,8 @@ from __future__ import annotations
 
 import json
 import os
+import re
+import uuid
 import urllib.error
 import urllib.request
 from datetime import datetime, timedelta
@@ -136,8 +138,15 @@ def events_on(when: datetime | None = None) -> list[dict]:
                 "end": end,
                 "calendar_id": item.get("calendar_id") or item.get("calendarId"),
                 "account": item.get("account"),
+                "hangout": meet_link(item),
+                "attendees": [
+                    (person.get("email") or "").strip()
+                    for person in (item.get("attendees") or [])
+                    if isinstance(person, dict) and (person.get("email") or "").strip()
+                ],
             }
         )
+    out.sort(key=lambda item: str(item.get("start") or ""))
     return out
 
 
@@ -168,7 +177,102 @@ def events_today() -> list[dict]:
     return events_on()
 
 
-def create(summary: str, start: str, end: str, description: str = "") -> dict:
+EMAIL = re.compile(r"[A-Z0-9._%+\-]+@[A-Z0-9.\-]+\.[A-Z]{2,}", re.I)
+
+
+def emails_in(text: str) -> list[str]:
+    seen: list[str] = []
+    for hit in EMAIL.findall(text or ""):
+        addr = hit.strip().casefold()
+        if addr and addr not in seen:
+            seen.append(addr)
+    return seen
+
+
+def wants_meet(text: str) -> bool:
+    """True only when they asked for a room URL, not a phone call."""
+    blob = (text or "").casefold()
+    needles = (
+        "google meet",
+        "hangout",
+        "hangoutsmeet",
+        "meet.google",
+        "link da call",
+        "link de call",
+        "link pra call",
+        "link para call",
+        "call link",
+        "video call",
+        "videocall",
+        "videochamada",
+        "vídeo chamada",
+        "video chamada",
+        "chamada de vídeo",
+        "chamada de video",
+        "cria o meet",
+        "criar o meet",
+        "com meet",
+        "with meet",
+        "zoom.us",
+        "zoom.com",
+    )
+    if any(n in blob for n in needles):
+        return True
+    return bool(re.search(r"(?<![a-zà-ÿ])meet(?![a-zà-ÿ])", blob))
+
+
+def meet_link(payload: dict | None) -> str:
+    """Google Meet URL from a create/list payload. Empty if none yet."""
+    if not isinstance(payload, dict):
+        return ""
+    event = payload.get("data") if isinstance(payload.get("data"), dict) else payload
+    if not isinstance(event, dict):
+        return ""
+    for key in ("hangoutLink", "hangout_link", "htmlLink", "html_link"):
+        uri = (event.get(key) or "").strip()
+        if "meet.google.com" in uri:
+            return uri
+    conference = event.get("conferenceData") or event.get("conference_data") or {}
+    if not isinstance(conference, dict):
+        conference = {}
+    for point in conference.get("entryPoints") or conference.get("entry_points") or []:
+        if not isinstance(point, dict):
+            continue
+        uri = (point.get("uri") or "").strip()
+        kind = (point.get("entryPointType") or point.get("entry_point_type") or "").lower()
+        if uri and (kind == "video" or "meet.google.com" in uri):
+            return uri
+    return ""
+
+
+def _conference() -> dict:
+    return {
+        "createRequest": {
+            "requestId": uuid.uuid4().hex,
+            "conferenceSolutionKey": {"type": "hangoutsMeet"},
+        }
+    }
+
+
+def _notify(body: dict) -> dict:
+    body["sendUpdates"] = "all"
+    body["send_updates"] = "all"
+    return body
+
+
+def _stamp(raw: str) -> datetime:
+    return datetime.fromisoformat(str(raw).replace("Z", "+00:00"))
+
+
+def create(
+    summary: str,
+    start: str,
+    end: str,
+    description: str = "",
+    meet: bool = False,
+    attendees: list[str] | None = None,
+    recurrence: list[str] | None = None,
+) -> dict:
     body = {
         "summary": summary,
         "start": start,
@@ -177,13 +281,92 @@ def create(summary: str, start: str, end: str, description: str = "") -> dict:
     }
     if description:
         body["description"] = description
-    return call("calendar.events.create", body)
+    if meet:
+        conference = _conference()
+        body["conferenceDataVersion"] = 1
+        body["conference_data_version"] = 1
+        body["conferenceData"] = conference
+        body["conference_data"] = conference
+    people = [addr for addr in (attendees or []) if addr]
+    if people:
+        body["attendees"] = [{"email": addr} for addr in people]
+        _notify(body)
+    rules = [rule for rule in (recurrence or []) if rule]
+    if rules:
+        body["recurrence"] = rules
+    payload = call("calendar.events.create", body)
+    if meet:
+        payload["hangout"] = meet_link(payload)
+    return payload
 
 
 def update(event_id: str, calendar_id: str, account: str, **fields) -> dict:
-    body = {"event_id": event_id, "calendar_id": calendar_id, "account": account}
+    body = {"event_id": event_id, "calendar_id": calendar_id or "primary", "account": account or ""}
     body.update(fields)
     return call("calendar.events.update", body)
+
+
+def move(
+    event_id: str,
+    start: str,
+    end: str = "",
+    calendar_id: str = "primary",
+    account: str = "",
+    when: datetime | None = None,
+) -> dict:
+    if not end:
+        found = next((item for item in events_on(when) if item.get("id") == event_id), None)
+        if not found or not found.get("start") or not found.get("end"):
+            raise SystemExit("move needs --end (event not on that day)")
+        end = (_stamp(start) + (_stamp(found["end"]) - _stamp(found["start"]))).isoformat()
+    return update(event_id, calendar_id, account, start=start, end=end, **_notify({}))
+
+
+def cancel(event_id: str, calendar_id: str = "primary", account: str = "") -> dict:
+    return call(
+        "calendar.events.delete",
+        _notify(
+            {
+                "event_id": event_id,
+                "calendar_id": calendar_id or "primary",
+                "account": account or "",
+            }
+        ),
+    )
+
+
+def invite(
+    event_id: str,
+    attendees: list[str],
+    calendar_id: str = "primary",
+    account: str = "",
+    meet: bool = False,
+    when: datetime | None = None,
+) -> dict:
+    people = [addr for addr in attendees if addr]
+    if not people:
+        raise SystemExit("invite needs at least one email")
+    try:
+        found = next((item for item in events_on(when) if item.get("id") == event_id), None)
+    except SystemExit:
+        found = None
+    if found:
+        have = {addr.casefold() for addr in people}
+        for addr in found.get("attendees") or []:
+            mail = (addr or "").strip().casefold()
+            if mail and mail not in have:
+                people.append(mail)
+                have.add(mail)
+    fields: dict = _notify({"attendees": [{"email": addr} for addr in people]})
+    if meet:
+        conference = _conference()
+        fields["conferenceDataVersion"] = 1
+        fields["conference_data_version"] = 1
+        fields["conferenceData"] = conference
+        fields["conference_data"] = conference
+    payload = update(event_id, calendar_id, account, **fields)
+    payload["hangout"] = meet_link(payload)
+    return payload
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -200,6 +383,26 @@ def main(argv: list[str] | None = None) -> int:
     make.add_argument("--start", required=True)
     make.add_argument("--end", required=True)
     make.add_argument("--description", default="")
+    make.add_argument("--meet", action="store_true", help="attach a Google Meet link")
+    make.add_argument("--to", action="append", default=[], help="invitee email (repeatable)")
+    shift = sub.add_parser("move")
+    shift.add_argument("--id", required=True)
+    shift.add_argument("--start", required=True)
+    shift.add_argument("--end", default="")
+    shift.add_argument("--calendar-id", default="primary")
+    shift.add_argument("--account", default="")
+    shift.add_argument("--date", default="")
+    drop = sub.add_parser("cancel")
+    drop.add_argument("--id", required=True)
+    drop.add_argument("--calendar-id", default="primary")
+    drop.add_argument("--account", default="")
+    guest = sub.add_parser("invite")
+    guest.add_argument("--id", required=True)
+    guest.add_argument("--to", action="append", default=[], help="invitee email (repeatable)")
+    guest.add_argument("--meet", action="store_true")
+    guest.add_argument("--calendar-id", default="primary")
+    guest.add_argument("--account", default="")
+    guest.add_argument("--date", default="")
     args = parser.parse_args(argv)
     if args.cmd == "status":
         print(json.dumps(call("status"), ensure_ascii=False))
@@ -211,7 +414,46 @@ def main(argv: list[str] | None = None) -> int:
         when = datetime.strptime(args.date, "%Y-%m-%d").replace(tzinfo=zone())
         print(json.dumps({"date": args.date, "events": events_on(when)}, ensure_ascii=False))
         return 0
-    print(json.dumps(create(args.summary, args.start, args.end, args.description), ensure_ascii=False))
+    if args.cmd == "move":
+        when = None
+        if args.date:
+            when = datetime.strptime(args.date, "%Y-%m-%d").replace(tzinfo=zone())
+        print(
+            json.dumps(
+                move(args.id, args.start, args.end, args.calendar_id, args.account, when=when),
+                ensure_ascii=False,
+            )
+        )
+        return 0
+    if args.cmd == "cancel":
+        print(json.dumps(cancel(args.id, args.calendar_id, args.account), ensure_ascii=False))
+        return 0
+    if args.cmd == "invite":
+        people = emails_in(" ".join(args.to))
+        when = None
+        if args.date:
+            when = datetime.strptime(args.date, "%Y-%m-%d").replace(tzinfo=zone())
+        print(
+            json.dumps(
+                invite(args.id, people, args.calendar_id, args.account, meet=args.meet, when=when),
+                ensure_ascii=False,
+            )
+        )
+        return 0
+    people = emails_in(" ".join(args.to))
+    print(
+        json.dumps(
+            create(
+                args.summary,
+                args.start,
+                args.end,
+                args.description,
+                meet=args.meet,
+                attendees=people,
+            ),
+            ensure_ascii=False,
+        )
+    )
     return 0
 
 

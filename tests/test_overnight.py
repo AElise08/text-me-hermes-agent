@@ -47,6 +47,8 @@ class OvernightApplyTests(unittest.TestCase):
         self.assertEqual(report["applied"], [])
         self.assertEqual(report["approvals"][0]["text"], "vídeo mudou para as 11h")
         self.assertTrue(report["approvals"][0]["proposed_when"].startswith("2026-09-17T11:00"))
+        self.assertEqual(report["approvals"][0]["event_id"], "evt1")
+        self.assertEqual(report["approvals"][0]["action"], "move")
 
     def test_question_stays_approval(self):
         messages = [
@@ -65,6 +67,28 @@ class OvernightApplyTests(unittest.TestCase):
             )
         self.assertEqual(report["applied"], [])
         self.assertEqual(report["approvals"][0]["text"], "podemos remarcar o vídeo pra 11?")
+
+    def test_cancel_mail_is_approval_with_event(self):
+        messages = [
+            {
+                "subject": "aula cancelada",
+                "snippet": "a aula de hoje foi cancelada",
+                "from": "escola@x",
+            }
+        ]
+        event = dict(self.event)
+        event["id"] = "aula1"
+        event["summary"] = "Aula"
+        with patch.object(self.mod.gcal_mod, "cancel", lambda *a, **k: (_ for _ in ()).throw(AssertionError("no cancel"))):
+            report = self.mod.run(
+                apply=True,
+                messages=messages,
+                events=[event],
+                now=self.now,
+            )
+        self.assertEqual(report["applied"], [])
+        self.assertEqual(report["approvals"][0]["action"], "cancel")
+        self.assertEqual(report["approvals"][0]["event_id"], "aula1")
 
     def test_inbox_follows_their_work_and_life_words(self):
         state = {

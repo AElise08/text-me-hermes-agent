@@ -13,6 +13,7 @@ import argparse
 import base64
 import json
 import mimetypes
+import re
 import sys
 import urllib.error
 import urllib.request
@@ -65,21 +66,35 @@ def list_messages(query: str = "", max_results: int = 10) -> list[dict]:
     return data if isinstance(data, list) else []
 
 
-def get_message(message_id: str) -> dict:
-    msg = gmail_api("GET", f"/messages/{message_id}?format=full")
-    headers = {}
+def _headers(msg: dict) -> dict[str, str]:
+    headers: dict[str, str] = {}
     for item in ((msg.get("payload") or {}).get("headers") or []):
         name = item.get("name")
         if name:
             headers[name.lower()] = item.get("value") or ""
+    return headers
+
+
+def parse_message(msg: dict) -> dict:
+    headers = _headers(msg)
     return {
         "id": msg.get("id"),
+        "thread_id": msg.get("threadId") or "",
         "snippet": msg.get("snippet"),
         "subject": headers.get("subject", ""),
         "from": headers.get("from", ""),
+        "to": headers.get("to", ""),
+        "cc": headers.get("cc", ""),
+        "reply_to": headers.get("reply-to", ""),
+        "message_id": headers.get("message-id", ""),
+        "references": headers.get("references", ""),
         "date": headers.get("date", ""),
         "plain": _plain(msg.get("payload") or {}),
     }
+
+
+def get_message(message_id: str) -> dict:
+    return parse_message(gmail_api("GET", f"/messages/{message_id}?format=full"))
 
 
 def _plain(payload: dict) -> str:
@@ -102,11 +117,21 @@ def _b64(data: str) -> str:
     return base64.urlsafe_b64decode(data + pad).decode("utf-8", "replace")
 
 
-def build_raw(from_addr: str, to: str, subject: str, body: str, files: list[Path] | None = None) -> str:
+def build_raw(
+    from_addr: str,
+    to: str,
+    subject: str,
+    body: str,
+    files: list[Path] | None = None,
+    extra_headers: dict | None = None,
+) -> str:
     msg = EmailMessage()
     msg["From"] = from_addr
     msg["To"] = to
     msg["Subject"] = subject
+    for key, value in (extra_headers or {}).items():
+        if value:
+            msg[key] = value
     msg.set_content(body or " ")
     for path in files or []:
         data = path.read_bytes()
@@ -191,6 +216,131 @@ def send(to: str, subject: str, body: str = "", files: list[Path] | None = None)
     return gmail_api("POST", "/messages/send", {"raw": raw}, token=tok)
 
 
+def compose_reply(message_id: str, body: str, reply_all: bool = False, token: str | None = None) -> dict:
+    """Build an in-thread reply. Does not send."""
+    tok = token or mint_google_token()
+    parsed = parse_message(gmail_api("GET", f"/messages/{message_id}?format=full", token=tok))
+    me = (gmail_api("GET", "/profile", token=tok).get("emailAddress") or "").casefold()
+    if not me:
+        raise SystemExit("gmail profile has no emailAddress")
+    people = gcal_mod.emails_in(parsed.get("reply_to") or parsed.get("from") or "")
+    if reply_all:
+        extra = gcal_mod.emails_in(f"{parsed.get('to') or ''} {parsed.get('cc') or ''}")
+        for addr in extra:
+            if addr not in people:
+                people.append(addr)
+    people = [addr for addr in people if addr != me]
+    if not people:
+        raise SystemExit("reply has no recipient")
+    subject = parsed.get("subject") or ""
+    if not re.match(r"(?i)^\s*re\s*:", subject):
+        subject = "Re: " + subject
+    mid = (parsed.get("message_id") or "").strip()
+    refs = (parsed.get("references") or "").strip()
+    if mid:
+        refs = f"{refs} {mid}".strip()
+    extra = {}
+    if mid:
+        extra["In-Reply-To"] = mid
+    if refs:
+        extra["References"] = refs
+    raw = build_raw(me, ", ".join(people), subject, body, extra_headers=extra)
+    return {
+        "raw": raw,
+        "thread_id": parsed.get("thread_id") or "",
+        "to": ", ".join(people),
+        "subject": subject,
+        "body": body,
+        "token": tok,
+        "from": me,
+        "in_reply_to": parsed.get("id") or message_id,
+    }
+
+
+def reply(message_id: str, body: str, reply_all: bool = False) -> dict:
+    """Send in the same Gmail thread. Prefer draft_reply until they say envia."""
+    composed = compose_reply(message_id, body, reply_all=reply_all)
+    payload: dict = {"raw": composed["raw"]}
+    if composed.get("thread_id"):
+        payload["threadId"] = composed["thread_id"]
+    return gmail_api("POST", "/messages/send", payload, token=composed["token"])
+
+
+def save_draft(raw: str, thread_id: str = "", token: str | None = None) -> dict:
+    payload: dict = {"message": {"raw": raw}}
+    if thread_id:
+        payload["message"]["threadId"] = thread_id
+    return gmail_api("POST", "/drafts", payload, token=token)
+
+
+def draft_reply(message_id: str, body: str, reply_all: bool = False) -> dict:
+    """Write a reply into Drafts. Nothing leaves the inbox until send_draft."""
+    composed = compose_reply(message_id, body, reply_all=reply_all)
+    saved = save_draft(composed["raw"], composed["thread_id"], token=composed["token"])
+    return {
+        "id": saved.get("id") or "",
+        "to": composed["to"],
+        "subject": composed["subject"],
+        "body": body,
+        "thread_id": composed["thread_id"],
+        "in_reply_to": composed["in_reply_to"],
+        "draft": saved,
+    }
+
+
+def draft_new(to: str, subject: str, body: str = "") -> dict:
+    tok = mint_google_token()
+    me = gmail_api("GET", "/profile", token=tok).get("emailAddress") or ""
+    if not me:
+        raise SystemExit("gmail profile has no emailAddress")
+    raw = build_raw(me, to, subject, body)
+    saved = save_draft(raw, token=tok)
+    return {
+        "id": saved.get("id") or "",
+        "to": to,
+        "subject": subject,
+        "body": body,
+        "draft": saved,
+    }
+
+
+def list_drafts(max_results: int = 8) -> list[dict]:
+    tok = mint_google_token()
+    listing = gmail_api(
+        "GET",
+        f"/drafts?maxResults={max(1, min(int(max_results), 20))}",
+        token=tok,
+    )
+    out = []
+    for item in listing.get("drafts") or []:
+        did = item.get("id") or ""
+        if not did:
+            continue
+        try:
+            full = gmail_api("GET", f"/drafts/{did}?format=full", token=tok)
+        except SystemExit:
+            continue
+        msg = parse_message(full.get("message") or {})
+        snippet = (full.get("message") or {}).get("snippet") or (msg.get("plain") or "")[:160]
+        out.append(
+            {
+                "id": did,
+                "to": msg.get("to") or "",
+                "subject": msg.get("subject") or "",
+                "snippet": snippet,
+                "thread_id": msg.get("thread_id") or "",
+            }
+        )
+    return out
+
+
+def send_draft(draft_id: str) -> dict:
+    """The 'envia' action. Sends one Gmail draft."""
+    if not (draft_id or "").strip():
+        raise SystemExit("send-draft needs a draft id")
+    return gmail_api("POST", "/drafts/send", {"id": draft_id.strip()})
+
+
 def send_kindle(kindle_email: str, epub: Path, title: str) -> dict:
     return send(
         kindle_email,
@@ -212,6 +362,21 @@ def main() -> int:
     clips.add_argument("--avoid", default="")
     getp = sub.add_parser("get")
     getp.add_argument("id")
+    draft = sub.add_parser("draft")
+    draft.add_argument("--id", required=True, help="Gmail message id to reply to")
+    draft.add_argument("--body", required=True)
+    draft.add_argument("--all", action="store_true", dest="reply_all")
+    sub.add_parser("drafts")
+    go = sub.add_parser("send-draft")
+    go.add_argument("--id", required=True, help="Gmail draft id")
+    fresh = sub.add_parser("draft-new")
+    fresh.add_argument("--to", required=True)
+    fresh.add_argument("--subject", required=True)
+    fresh.add_argument("--body", default="")
+    back = sub.add_parser("reply")
+    back.add_argument("--id", required=True)
+    back.add_argument("--body", required=True)
+    back.add_argument("--all", action="store_true", dest="reply_all")
     sendp = sub.add_parser("send")
     sendp.add_argument("--to", required=True)
     sendp.add_argument("--subject", required=True)
@@ -235,6 +400,21 @@ def main() -> int:
         return 0
     if args.cmd == "get":
         print(json.dumps(get_message(args.id), ensure_ascii=False))
+        return 0
+    if args.cmd == "draft":
+        print(json.dumps(draft_reply(args.id, args.body, reply_all=args.reply_all), ensure_ascii=False))
+        return 0
+    if args.cmd == "drafts":
+        print(json.dumps({"drafts": list_drafts()}, ensure_ascii=False))
+        return 0
+    if args.cmd == "send-draft":
+        print(json.dumps(send_draft(args.id), ensure_ascii=False))
+        return 0
+    if args.cmd == "draft-new":
+        print(json.dumps(draft_new(args.to, args.subject, args.body), ensure_ascii=False))
+        return 0
+    if args.cmd == "reply":
+        print(json.dumps(reply(args.id, args.body, reply_all=args.reply_all), ensure_ascii=False))
         return 0
     if args.cmd == "send":
         files = [Path(p) for p in args.file]
