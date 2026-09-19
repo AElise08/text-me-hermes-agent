@@ -269,7 +269,7 @@ python3 /var/lib/hermes/scripts/printer.py probe
 
 ## Usage reporting
 
-This image reports token usage to the [Agent Index](https://aiworthusing.com/agent-index/text-me)
+The base image's own reporter sends token usage to the [Agent Index](https://aiworthusing.com/agent-index/text-me)
 every 5 minutes: day × model counts, nothing else. The listing page (name, repo,
 video) is **not** published by this boot — that is a separate step.
 
