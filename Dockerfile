@@ -1,4 +1,7 @@
 FROM public.ecr.aws/e1h7x4a2/plow-cloud-agents:base-ef0019372ff8bca593611b31ebd2e08f9f1458ff@sha256:a8a2f97ad78b8192d80a984dce81d3bf5a9a883d18cb7b677704913a09b56aee
+# Cloud deployments run without compose.yml; keep usage reporting enabled.
+ENV AGENT_ID=text-me
+
 COPY runtime/SOUL.md /var/lib/hermes/SOUL.md
 COPY LICENSE NOTICE /usr/share/doc/matriz/
 COPY skills/matriz/ /opt/hermes/skills/matriz/
